@@ -126,7 +126,7 @@ class MemoryUsageModel(Base):
     __tablename__ = "memory_usage"
     id = Column(String, primary_key=True)
     memory_id = Column(String, ForeignKey("memories.id"))
-    execution_id = Column(String)
+    execution_id = Column(String, ForeignKey("executions.id"), nullable=True)
     agent_id = Column(String)
     used_at = Column(DateTime, default=datetime.utcnow)
     score = Column(Float, default=0.0)
