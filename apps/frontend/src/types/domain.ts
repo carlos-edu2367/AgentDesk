@@ -13,6 +13,8 @@ export type ApprovalMode = 'manual' | 'auto'
 export type EventType =
   | 'execution_created'
   | 'execution_started'
+  | 'execution_waiting_approval'
+  | 'execution_resumed'
   | 'agent_started'
   | 'prompt_built'
   | 'model_request_started'
@@ -23,17 +25,73 @@ export type EventType =
   | 'execution_failed'
   | 'execution_cancelled'
   | 'tool_call_ignored'
+  | 'tool_call_requested'
+  | 'tool_call_validated'
+  | 'tool_call_denied'
+  | 'tool_executed'
+  | 'tool_result'
+  | 'tool_failed'
+  | 'approval_requested'
+  | 'approval_approved'
+  | 'approval_rejected'
+  | 'approval_auto_granted'
+  | 'terminal_started'
+  | 'terminal_completed'
+  | 'terminal_failed'
+  | 'terminal_timeout'
   | 'message'
   | 'status'
   | 'tool_call'
-  | 'tool_result'
   | 'approval_request'
   | 'approval_result'
   | 'memory_lookup'
   | 'memory_write'
+  | 'memory_lookup_result'
+  | 'memory_created'
+  | 'memory_updated'
+  | 'memory_deleted'
+  | 'memory_embedding_generated'
+  | 'memory_embedding_failed'
+  | 'memory_usage_recorded'
   | 'subagent_call'
   | 'team_event'
   | 'error'
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'expired'
+
+export interface ApprovalRequest {
+  id: string
+  execution_id: string
+  agent_id: string
+  tool: string
+  status: ApprovalStatus
+  risk_level: string
+  summary: string
+  arguments: Record<string, unknown>
+  rejection_reason: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface ToolDefinition {
+  name: string
+  description: string
+  source: string
+  capability: string
+  critical: boolean
+  input_schema: Record<string, unknown>
+}
+
+export interface CapabilityInfo {
+  name: string
+  tools: string[]
+}
+
+export interface AgentToolsConfig {
+  capabilities: string[]
+  explicit_tools: string[]
+  blocked_tools: string[]
+}
 
 export interface ModelConfig {
   provider_id: string
@@ -194,4 +252,80 @@ export interface HealthResponse {
 export interface StorageInfo {
   appdata_path: string
   database_path: string
+}
+
+export type MemoryScope = 'global' | 'agent' | 'team' | 'workspace'
+export type MemoryType =
+  | 'profile' | 'preference' | 'project' | 'file_reference'
+  | 'task_history' | 'decision' | 'lesson' | 'error_pattern'
+  | 'workflow' | 'system_note'
+
+export interface Memory {
+  id: string
+  scope: MemoryScope
+  scope_id: string | null
+  type: MemoryType
+  title: string
+  content: string
+  tags: string[]
+  confidence: number
+  importance: number
+  source: Record<string, unknown>
+  created_at: string
+  updated_at: string
+  last_used_at: string | null
+  usage_count: number
+  deleted_at: string | null
+  embedding_status: 'pending' | 'done' | 'failed'
+}
+
+export interface MemoryCreate {
+  scope: MemoryScope
+  scope_id?: string | null
+  type: MemoryType
+  title: string
+  content: string
+  tags?: string[]
+  confidence?: number
+  importance?: number
+  source?: Record<string, unknown>
+}
+
+export interface MemoryUpdate {
+  title?: string
+  content?: string
+  tags?: string[]
+  confidence?: number
+  importance?: number
+}
+
+export interface MemorySearchRequest {
+  query: string
+  scopes?: string[]
+  mode?: 'text' | 'semantic' | 'hybrid'
+  limit?: number
+}
+
+export interface MemorySearchResult {
+  memory_id: string
+  score: number
+  scope: string
+  scope_id: string | null
+  type: string
+  title: string
+  content: string
+  tags: string[]
+  confidence: number
+  importance: number
+  has_embedding: boolean
+}
+
+export interface MemorySearchResponse {
+  results: MemorySearchResult[]
+}
+
+export interface MemoryLinkCreate {
+  target_memory_id: string
+  relation_type: string
+  strength?: number
 }
