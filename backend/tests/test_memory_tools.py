@@ -62,7 +62,7 @@ async def test_memory_create_tool(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     db = _make_db()
     tool = MemoryCreateTool()
-    with patch("app.tools.core.memory.get_embedding_for_memory", AsyncMock(return_value=None)):
+    with patch("app.memory.service.get_embedding_for_memory", AsyncMock(return_value=None)):
         result = await tool.execute(
             {
                 "title": "Nova memória",
@@ -94,3 +94,21 @@ def test_memory_search_tool_capability():
 
 def test_memory_create_tool_not_critical():
     assert MemoryCreateTool().critical is False
+
+
+@pytest.mark.asyncio
+async def test_memory_create_tool_invalid_scope_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    tool = MemoryCreateTool()
+    with pytest.raises(ToolError):
+        await tool.execute({"title": "T", "content": "C", "scope": "invalid_scope"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_create_tool_missing_content_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    tool = MemoryCreateTool()
+    with pytest.raises(ToolError):
+        await tool.execute({"title": "Tem título"}, _ctx(db))

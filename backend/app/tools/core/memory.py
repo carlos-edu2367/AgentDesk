@@ -2,7 +2,6 @@ from typing import Any, Dict
 
 from app.tools.base import BaseTool, ToolExecutionContext
 from app.tools.errors import ToolError
-from app.memory.embeddings import get_embedding_for_memory
 from app.memory.service import MemoryService
 from app.domain.schemas import MemoryCreate, MemorySearchRequest
 from app.domain.enums import MemoryScope, MemoryType
@@ -32,7 +31,7 @@ class MemorySearchTool(BaseTool):
 
         scopes = arguments.get("scopes", ["global"])
         mode = arguments.get("mode", "hybrid")
-        limit = int(arguments.get("limit", 10))
+        limit = min(int(arguments.get("limit", 10)), 100)
 
         svc = MemoryService(context.db)
         request = MemorySearchRequest(query=query, scopes=scopes, mode=mode, limit=limit)
@@ -77,13 +76,15 @@ class MemoryCreateTool(BaseTool):
         try:
             scope = MemoryScope(scope_str)
         except ValueError:
-            scope = MemoryScope.GLOBAL
+            valid = [s.value for s in MemoryScope]
+            raise ToolError("INVALID_ARGUMENT", f"Invalid scope '{scope_str}'. Valid values: {valid}")
 
         type_str = arguments.get("type", "preference")
         try:
             mem_type = MemoryType(type_str)
         except ValueError:
-            mem_type = MemoryType.PREFERENCE
+            valid = [t.value for t in MemoryType]
+            raise ToolError("INVALID_ARGUMENT", f"Invalid type '{type_str}'. Valid values: {valid}")
 
         mem_in = MemoryCreate(
             scope=scope,

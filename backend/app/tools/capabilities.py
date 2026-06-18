@@ -51,6 +51,8 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
     "filesystem.copy": "low",
     "terminal.exec": "high",
     "http.request": "medium",
+    "memory.search": "low",
+    "memory.create": "low",
 }
 
 TOOL_SUMMARIES: Dict[str, str] = {
@@ -60,6 +62,8 @@ TOOL_SUMMARIES: Dict[str, str] = {
     "filesystem.copy": "Copy a file or directory",
     "terminal.exec": "Execute a terminal command",
     "http.request": "Make an HTTP request",
+    "memory.search": "Search stored memories",
+    "memory.create": "Store a new memory entry",
 }
 
 

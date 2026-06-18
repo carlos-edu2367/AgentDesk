@@ -76,6 +76,7 @@ def register_core_tools() -> None:
     from app.tools.core.http_tool import HttpRequestTool
     from app.tools.core.workspace import WorkspaceGetTool, WorkspaceListTool
     from app.tools.core.logs import LogsGetExecutionTool, LogsSearchTool
+    from app.tools.core.memory import MemorySearchTool, MemoryCreateTool
 
     core_tools = [
         # Read-only filesystem
@@ -98,13 +99,10 @@ def register_core_tools() -> None:
         # Logs
         LogsSearchTool(),
         LogsGetExecutionTool(),
+        # Memory
+        MemorySearchTool(),
+        MemoryCreateTool(),
     ]
     for tool in core_tools:
-        if not tool_registry.exists(tool.name):
-            tool_registry.register(tool)
-
-    from app.tools.core.memory import MemorySearchTool, MemoryCreateTool
-    memory_tools = [MemorySearchTool(), MemoryCreateTool()]
-    for tool in memory_tools:
         if not tool_registry.exists(tool.name):
             tool_registry.register(tool)
