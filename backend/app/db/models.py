@@ -46,6 +46,7 @@ class TeamModel(Base):
     description = Column(String, default="")
     leader_agent_id = Column(String, ForeignKey("agents.id"))
     member_agent_ids = Column(JSON, default=list)
+    skills = Column(JSON, default=list)
     execution_strategy = Column(String, default="leader_managed")
     memory_config = Column(JSON, default=dict)
     tools_policy = Column(JSON, default=dict)
@@ -151,6 +152,22 @@ class SkillModel(Base):
     tags = Column(JSON, default=list)
     prompt = Column(Text)
     examples = Column(JSON, default=list)
+    plugin_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
+
+class AgentSkillModel(Base):
+    __tablename__ = "agent_skills"
+    agent_id = Column(String, ForeignKey("agents.id"), primary_key=True)
+    skill_id = Column(String, ForeignKey("skills.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class TeamSkillModel(Base):
+    __tablename__ = "team_skills"
+    team_id = Column(String, ForeignKey("teams.id"), primary_key=True)
+    skill_id = Column(String, ForeignKey("skills.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class PluginModel(Base):
     __tablename__ = "plugins"
@@ -160,9 +177,25 @@ class PluginModel(Base):
     description = Column(String, default="")
     enabled = Column(Boolean, default=True)
     manifest_path = Column(String, default="")
+    install_path = Column(String, default="")
     permissions = Column(JSON, default=list)
+    tools_json = Column(JSON, default=list)
+    skills_json = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
+
+class AgentPluginModel(Base):
+    __tablename__ = "agent_plugins"
+    agent_id = Column(String, ForeignKey("agents.id"), primary_key=True)
+    plugin_id = Column(String, ForeignKey("plugins.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class TeamPluginModel(Base):
+    __tablename__ = "team_plugins"
+    team_id = Column(String, ForeignKey("teams.id"), primary_key=True)
+    plugin_id = Column(String, ForeignKey("plugins.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class MCPServerModel(Base):
     __tablename__ = "mcp_servers"
@@ -173,8 +206,24 @@ class MCPServerModel(Base):
     command = Column(String)
     args = Column(JSON, default=list)
     env = Column(JSON, default=dict)
+    tools_cache_json = Column(JSON, default=list)
+    last_connected_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
+
+class AgentMCPServerModel(Base):
+    __tablename__ = "agent_mcp_servers"
+    agent_id = Column(String, ForeignKey("agents.id"), primary_key=True)
+    mcp_server_id = Column(String, ForeignKey("mcp_servers.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class TeamMCPServerModel(Base):
+    __tablename__ = "team_mcp_servers"
+    team_id = Column(String, ForeignKey("teams.id"), primary_key=True)
+    mcp_server_id = Column(String, ForeignKey("mcp_servers.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class ApprovalRequestModel(Base):
     __tablename__ = "execution_approvals"

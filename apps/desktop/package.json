@@ -1,16 +1,67 @@
 {
   "name": "agentdesk-desktop",
   "version": "0.1.0",
+  "description": "AgentDesk Desktop Application",
+  "author": "AgentDesk Contributors",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"npm run wait-frontend\" \"electron .\"",
-    "wait-frontend": "wait-on http://localhost:5173 && echo Frontend ready"
+    "dev": "cross-env NODE_ENV=development electron .",
+    "build": "electron-builder --win",
+    "package:portable": "electron-builder --win portable",
+    "package:installer": "electron-builder --win nsis"
+  },
+  "build": {
+    "extends": null,
+    "appId": "com.agentdesk.app",
+    "productName": "AgentDesk",
+    "copyright": "Copyright (c) 2026 AgentDesk",
+    "directories": {
+      "output": "../../dist/electron",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend/dist",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../../backend/dist/agentdesk-backend",
+        "to": "backend/agentdesk-backend",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "artifactName": "AgentDesk-Setup-${version}.exe",
+      "uninstallDisplayName": "AgentDesk"
+    },
+    "portable": {
+      "artifactName": "AgentDesk-Portable-${version}.exe"
+    }
   },
   "dependencies": {},
   "devDependencies": {
     "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
     "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "wait-on": "^7.2.0"
   }
 }

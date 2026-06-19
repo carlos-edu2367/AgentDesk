@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from app.domain.enums import (
     ProviderType, ExecutionType, ExecutionStatus, EventType,
     ToolSource, MemoryScope, MemoryType, ApprovalStatus, ApprovalMode
@@ -111,6 +111,7 @@ class TeamBase(BaseModel):
     description: str = ""
     leader_agent_id: str
     member_agent_ids: List[str] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
     execution_strategy: str = "leader_managed"
     memory_config: TeamMemoryConfig = Field(default_factory=TeamMemoryConfig)
     tools_policy: TeamToolsPolicy = Field(default_factory=TeamToolsPolicy)
@@ -123,6 +124,7 @@ class TeamUpdate(BaseModel):
     description: Optional[str] = None
     leader_agent_id: Optional[str] = None
     member_agent_ids: Optional[List[str]] = None
+    skills: Optional[List[str]] = None
     execution_strategy: Optional[str] = None
     memory_config: Optional[TeamMemoryConfig] = None
     tools_policy: Optional[TeamToolsPolicy] = None
@@ -203,12 +205,40 @@ class ExecutionEvent(ExecutionEventBase):
 
 # Outros
 class SkillBase(BaseModel):
+    id: str
     name: str
     version: str = "0.1.0"
     description: str = ""
     tags: List[str] = Field(default_factory=list)
     prompt: str
     examples: List[Dict[str, Any]] = Field(default_factory=list)
+    plugin_id: Optional[str] = None
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        import re
+
+        normalized = value.strip().lower().replace("-", "_")
+        if normalized != value.strip():
+            value = normalized
+        if not re.fullmatch(r"skill_[a-z0-9_]+", value):
+            raise ValueError("Skill id must match skill_[a-z0-9_]+")
+        return value
+
+    @field_validator("name", "version", "description")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Field cannot be empty")
+        return value.strip()
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("Skill prompt cannot be empty")
+        return value.strip()
 
 class SkillCreate(SkillBase):
     pass
@@ -221,8 +251,24 @@ class SkillUpdate(BaseModel):
     prompt: Optional[str] = None
     examples: Optional[List[Dict[str, Any]]] = None
 
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.strip():
+            raise ValueError("Skill prompt cannot be empty")
+        return value.strip() if value is not None else value
+
 class Skill(SkillBase):
-    id: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class SkillImportRequest(BaseModel):
+    skill: SkillCreate
+
+class SkillIdsRequest(BaseModel):
+    skill_ids: List[str] = Field(default_factory=list)
 
 class PluginBase(BaseModel):
     name: str
@@ -230,7 +276,10 @@ class PluginBase(BaseModel):
     description: str = ""
     enabled: bool = True
     manifest_path: str = ""
+    install_path: str = ""
     permissions: List[str] = Field(default_factory=list)
+    tools_json: List[Dict[str, Any]] = Field(default_factory=list)
+    skills_json: List[Dict[str, Any]] = Field(default_factory=list)
 
 class PluginCreate(PluginBase):
     pass
@@ -241,12 +290,51 @@ class PluginUpdate(BaseModel):
     description: Optional[str] = None
     enabled: Optional[bool] = None
     manifest_path: Optional[str] = None
+    install_path: Optional[str] = None
     permissions: Optional[List[str]] = None
+    tools_json: Optional[List[Dict[str, Any]]] = None
+    skills_json: Optional[List[Dict[str, Any]]] = None
+    deleted_at: Optional[datetime] = None
 
 class Plugin(PluginBase):
     id: str
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class PluginImportRequest(BaseModel):
+    path: str
+
+class PluginImportResponse(BaseModel):
+    id: str
+    name: str
+    version: str
+    enabled: bool
+    tools: List[str] = Field(default_factory=list)
+    skills: List[str] = Field(default_factory=list)
+
+class PluginToolInfo(BaseModel):
+    name: str
+    description: str
+    entrypoint: str
+    runtime: str = "python"
+    capability: str
+    critical: bool = False
+    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    plugin_id: str
+
+class PluginIdsRequest(BaseModel):
+    plugin_ids: List[str] = Field(default_factory=list)
+
+class MCPToolInfo(BaseModel):
+    name: str
+    original_name: str
+    description: str = ""
+    input_schema: Dict[str, Any] = Field(default_factory=dict)
+    server_id: str
+    critical: bool = True
+
 
 class MCPServerBase(BaseModel):
     name: str
@@ -256,8 +344,27 @@ class MCPServerBase(BaseModel):
     args: List[str] = Field(default_factory=list)
     env: Dict[str, str] = Field(default_factory=dict)
 
+    @field_validator("transport")
+    @classmethod
+    def validate_transport(cls, value: str) -> str:
+        if value != "stdio":
+            raise ValueError("Only stdio MCP transport is supported")
+        return value
+
 class MCPServerCreate(MCPServerBase):
-    pass
+    id: str
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value: str) -> str:
+        import re
+
+        normalized = value.strip().lower().replace("-", "_")
+        normalized = re.sub(r"[^a-z0-9_]", "_", normalized)
+        normalized = re.sub(r"_+", "_", normalized).strip("_")
+        if not normalized:
+            raise ValueError("MCP server id cannot be empty")
+        return normalized
 
 class MCPServerUpdate(BaseModel):
     name: Optional[str] = None
@@ -267,10 +374,38 @@ class MCPServerUpdate(BaseModel):
     args: Optional[List[str]] = None
     env: Optional[Dict[str, str]] = None
 
+    @field_validator("transport")
+    @classmethod
+    def validate_transport(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and value != "stdio":
+            raise ValueError("Only stdio MCP transport is supported")
+        return value
+
 class MCPServer(MCPServerBase):
     id: str
+    tools_cache_json: List[Dict[str, Any]] = Field(default_factory=list)
+    last_connected_at: Optional[datetime] = None
+    last_error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    deleted_at: Optional[datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MCPServerIdsRequest(BaseModel):
+    server_ids: List[str] = Field(default_factory=list)
+
+
+class MCPTestError(BaseModel):
+    code: str
+    message: str
+
+
+class MCPTestResponse(BaseModel):
+    server_id: str
+    status: str
+    tools: List[MCPToolInfo] = Field(default_factory=list)
+    error: Optional[MCPTestError] = None
 
 class AuditLogCreate(BaseModel):
     execution_id: str
@@ -284,6 +419,73 @@ class AuditLog(AuditLogCreate):
     id: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+class AuditLogView(AuditLog):
+    team_id: Optional[str] = None
+    tool: Optional[str] = None
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    approval_mode: Optional[str] = None
+    status: Optional[str] = None
+    duration_ms: Optional[int] = None
+
+class PaginatedAuditLogs(BaseModel):
+    items: List[AuditLogView]
+    total: int
+    limit: int
+    offset: int
+
+class ExecutionDetailSummary(BaseModel):
+    total_events: int = 0
+    total_audit_logs: int = 0
+    tools_used: List[str] = Field(default_factory=list)
+    agents_involved: List[str] = Field(default_factory=list)
+    mcp_servers_used: List[str] = Field(default_factory=list)
+    plugins_used: List[str] = Field(default_factory=list)
+    skills_used: List[str] = Field(default_factory=list)
+    memories_used: List[str] = Field(default_factory=list)
+    approval_mode: str = "manual"
+    critical_actions_count: int = 0
+    auto_approved_count: int = 0
+    manual_approved_count: int = 0
+    manual_rejected_count: int = 0
+
+class ExecutionDetail(BaseModel):
+    execution: Execution
+    events: List[ExecutionEvent] = Field(default_factory=list)
+    audit_logs: List[AuditLogView] = Field(default_factory=list)
+    approvals: List["ApprovalRequest"] = Field(default_factory=list)
+    artifacts: List[Dict[str, Any]] = Field(default_factory=list)
+    summary: ExecutionDetailSummary
+
+class ExecutionExportRequest(BaseModel):
+    format: Literal["json", "markdown"]
+
+class ExecutionExportResponse(BaseModel):
+    format: str
+    path: str
+    content: Any
+
+class LogsCleanupRequest(BaseModel):
+    older_than_days: int = 90
+    include_audit_logs: bool = False
+    include_execution_events: bool = True
+    dry_run: bool = True
+
+class LogsCleanupCounts(BaseModel):
+    execution_events: int = 0
+    audit_logs: int = 0
+    executions: int = 0
+
+class LogsCleanupResponse(BaseModel):
+    dry_run: bool
+    would_delete: LogsCleanupCounts
+    deleted: LogsCleanupCounts = Field(default_factory=LogsCleanupCounts)
+
+class RetentionSettings(BaseModel):
+    logs_retention_days: int = 90
+    audit_retention_days: int = 365
+    keep_failed_executions: bool = True
 
 # ApprovalRequest
 class ApprovalRequestCreate(BaseModel):

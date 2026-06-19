@@ -1,4 +1,14 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://127.0.0.1:8000'
+// Resolve the API base URL at module load time.
+// Priority: Electron preload (packaged app) > VITE_API_BASE_URL (dev env var) > default
+function resolveBaseUrl(): string {
+  if (typeof window !== 'undefined') {
+    const electronApi = (window as Window & { electronAPI?: { apiBaseUrl?: string } }).electronAPI
+    if (electronApi?.apiBaseUrl) return electronApi.apiBaseUrl
+  }
+  return (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://127.0.0.1:8000'
+}
+
+const BASE_URL = resolveBaseUrl()
 
 export class ApiError extends Error {
   constructor(
@@ -36,7 +46,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, params?: object) => {
+    const query = params
+      ? new URLSearchParams(
+          Object.entries(params as Record<string, unknown>)
+            .filter(([, value]) => value !== undefined && value !== null && value !== '')
+            .map(([key, value]) => [key, String(value)]),
+        ).toString()
+      : ''
+    return request<T>(query ? `${path}?${query}` : path)
+  },
   post: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
   put: <T>(path: string, body: unknown) =>

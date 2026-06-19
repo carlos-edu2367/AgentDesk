@@ -8,6 +8,7 @@ from app.domain.schemas import (
 )
 from app.domain.enums import EventType, ApprovalStatus, ApprovalMode
 from app.domain.utils import generate_id
+from app.domain.utils import sanitize_for_output
 from app.providers import provider_registry, ChatRequest, ChatMessage, ProviderError
 from app.tools.base import ToolExecutionContext
 from app.tools.capabilities import CRITICAL_TOOLS, get_risk_level, get_tool_summary
@@ -16,6 +17,7 @@ from app.tools.registry import tool_registry
 from app.permissions.gate import check_tool_permission, get_available_tool_definitions
 from app.memory.service import MemoryService
 from app.domain.schemas import MemorySearchRequest
+from app.skills.service import SkillService
 from .prompt_builder import PromptBuilder
 from .parser import OutputParser
 
@@ -36,6 +38,7 @@ class AgentRuntime:
             return
         try:
             from app.db.repositories.registry import audit_log_repo
+            data = sanitize_for_output(data)
             log_in = AuditLogCreate(
                 execution_id=execution_id,
                 agent_id=agent_id,
@@ -93,10 +96,12 @@ class AgentRuntime:
         stream: bool = True,
         initial_messages: Optional[List[Dict]] = None,
         initial_step: int = 0,
+        runtime_options: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[ExecutionEventCreate, None]:
         execution_id = execution.id
         agent_id = agent.id
         approval_mode = execution.approval_mode
+        runtime_options = runtime_options or {}
 
         try:
             provider = provider_registry.get(provider_config)
@@ -119,6 +124,12 @@ class AgentRuntime:
                         scopes.append("global")
                     if agent.memory_config.use_agent_memory:
                         scopes.append(f"agent:{agent_id}")
+                    if (
+                        runtime_options.get("include_team_memory")
+                        and runtime_options.get("team_id")
+                        and agent.memory_config.use_team_memory
+                    ):
+                        scopes.append(f"team:{runtime_options['team_id']}")
 
                     if scopes:
                         yield self._make_event(
@@ -150,7 +161,54 @@ class AgentRuntime:
                 except Exception:
                     pass  # Memory failure must never crash execution
 
-                builder = PromptBuilder(agent, execution, available_tools, memory_context=memory_context)
+                skills_context = ""
+                try:
+                    team_skill_ids = runtime_options.get("team_skill_ids", [])
+                    if not team_skill_ids and runtime_options.get("team_id") and self.db:
+                        from app.db.repositories.registry import team_repo
+                        team = team_repo.get(self.db, id=runtime_options["team_id"])
+                        team_skill_ids = team.skills if team else []
+
+                    skill_result = SkillService(self.db).format_skills_for_prompt(
+                        agent.skills or [],
+                        team_skill_ids or [],
+                    )
+                    skills_context = skill_result.text
+
+                    if skill_result.loaded:
+                        yield self._make_event(
+                            execution_id, EventType.SKILLS_LOADED, "runtime", agent_id,
+                            {"count": len(skill_result.loaded), "skills": skill_result.loaded}
+                        )
+                    for skill in skill_result.injected:
+                        yield self._make_event(
+                            execution_id, EventType.SKILL_INJECTED, "runtime", agent_id,
+                            {"skill": skill}
+                        )
+                    if skill_result.truncated:
+                        yield self._make_event(
+                            execution_id, EventType.SKILLS_TRUNCATED, "runtime", agent_id,
+                            {
+                                "count": len(skill_result.injected),
+                                "max_skills_per_prompt": SkillService.max_skills_per_prompt,
+                                "max_skill_chars_per_item": SkillService.max_skill_chars_per_item,
+                                "max_total_skill_chars": SkillService.max_total_skill_chars,
+                            }
+                        )
+                except Exception as exc:
+                    yield self._make_event(
+                        execution_id, EventType.SKILL_LOAD_FAILED, "runtime", agent_id,
+                        {"error": str(exc)}
+                    )
+
+                builder = PromptBuilder(
+                    agent,
+                    execution,
+                    available_tools,
+                    skills_context=skills_context,
+                    memory_context=memory_context,
+                    operational_context=runtime_options.get("operational_context", ""),
+                )
                 messages = builder.build_messages()
                 yield self._make_event(
                     execution_id, EventType.PROMPT_BUILT, "runtime", agent_id,
@@ -243,10 +301,15 @@ class AgentRuntime:
                     workspace_ids=execution.workspace_ids or [],
                     db=self.db,
                     approval_mode=str(approval_mode),
+                    extra=runtime_options,
                 )
+                tool = tool_registry.get(tool_name)
+                is_plugin_tool = getattr(tool, "source", "") == "plugin"
+                is_mcp_tool = getattr(tool, "source", "") == "mcp"
+                is_critical = tool_name in CRITICAL_TOOLS or bool(getattr(tool, "critical", False))
 
                 # --- Approval gate for critical tools ---
-                if tool_name in CRITICAL_TOOLS:
+                if is_critical:
                     if approval_mode == ApprovalMode.MANUAL:
                         approval_id = self._save_approval_request(
                             execution_id, agent_id, tool_name, tool_args,
@@ -299,10 +362,29 @@ class AgentRuntime:
 
                 # --- Execute tool ---
                 try:
-                    tool = tool_registry.get(tool_name)
+                    if is_plugin_tool:
+                        yield self._make_event(
+                            execution_id, EventType.PLUGIN_TOOL_CALL_REQUESTED, "runtime", agent_id,
+                            {"tool": tool_name, "arguments": tool_args, "plugin_id": getattr(tool, "plugin_id", "")}
+                        )
+                    if is_mcp_tool:
+                        yield self._make_event(
+                            execution_id, EventType.MCP_TOOL_CALL_REQUESTED, "runtime", agent_id,
+                            {"tool": tool_name, "arguments": tool_args, "server_id": getattr(tool, "server_id", "")}
+                        )
                     result = await tool.execute(tool_args, context)
 
                     result_preview = json.dumps(result, ensure_ascii=False)[:TOOL_RESULT_PREVIEW_BYTES]
+                    if is_plugin_tool:
+                        yield self._make_event(
+                            execution_id, EventType.PLUGIN_TOOL_COMPLETED, "tool", tool_name,
+                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "result_preview": result_preview}
+                        )
+                    if is_mcp_tool:
+                        yield self._make_event(
+                            execution_id, EventType.MCP_TOOL_COMPLETED, "tool", tool_name,
+                            {"tool": tool_name, "server_id": getattr(tool, "server_id", ""), "result_preview": result_preview}
+                        )
 
                     yield self._make_event(
                         execution_id, EventType.TOOL_EXECUTED, "tool", tool_name,
@@ -317,7 +399,7 @@ class AgentRuntime:
                         execution_id, agent_id, "tool_executed",
                         f"Executou {tool_name}",
                         {"tool": tool_name, "arguments": tool_args, "result_preview": result_preview},
-                        risk_level=get_risk_level(tool_name) if tool_name in CRITICAL_TOOLS else "low",
+                        risk_level=get_risk_level(tool_name) if is_critical else "low",
                     )
 
                     messages.append({"role": "user", "content": json.dumps({
@@ -328,6 +410,21 @@ class AgentRuntime:
                     })})
 
                 except ToolError as exc:
+                    if is_plugin_tool and exc.code == "PLUGIN_DISABLED":
+                        yield self._make_event(
+                            execution_id, EventType.PLUGIN_DISABLED_TOOL_BLOCKED, "tool", tool_name,
+                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message}
+                        )
+                    elif is_plugin_tool:
+                        yield self._make_event(
+                            execution_id, EventType.PLUGIN_TOOL_FAILED, "tool", tool_name,
+                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message, "code": exc.code}
+                        )
+                    if getattr(tool, "source", "") == "mcp":
+                        yield self._make_event(
+                            execution_id, EventType.MCP_TOOL_FAILED, "tool", tool_name,
+                            {"tool": tool_name, "server_id": getattr(tool, "server_id", ""), "error": exc.message, "code": exc.code}
+                        )
                     yield self._make_event(
                         execution_id, EventType.TOOL_FAILED, "tool", tool_name,
                         {"tool": tool_name, "error": exc.message, "code": exc.code}
@@ -336,7 +433,7 @@ class AgentRuntime:
                         execution_id, agent_id, "tool_failed",
                         f"Tool '{tool_name}' falhou: {exc.message}",
                         {"tool": tool_name, "arguments": tool_args, "error": exc.message, "code": exc.code},
-                        risk_level=get_risk_level(tool_name) if tool_name in CRITICAL_TOOLS else "low",
+                        risk_level=get_risk_level(tool_name) if is_critical else "low",
                     )
                     messages.append({"role": "user", "content": json.dumps({
                         "type": "tool_error",

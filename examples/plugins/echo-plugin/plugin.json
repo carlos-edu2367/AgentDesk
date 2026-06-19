@@ -1,0 +1,24 @@
+{
+  "id": "echo-plugin",
+  "name": "Echo Plugin",
+  "version": "0.1.0",
+  "description": "Safe sample plugin that echoes JSON input.",
+  "permissions": [],
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Return the provided message.",
+      "command": "python tools/echo.py",
+      "timeout_seconds": 5,
+      "input_schema": {
+        "message": {
+          "type": "string",
+          "required": true
+        }
+      }
+    }
+  ],
+  "skills": [
+    "skills/echo.skill.json"
+  ]
+}

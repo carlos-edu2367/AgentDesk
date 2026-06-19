@@ -1,0 +1,8 @@
+{
+  "id": "echo-skill",
+  "name": "Echo Skill",
+  "version": "0.1.0",
+  "description": "Ask the agent to respond concisely during smoke tests.",
+  "tags": ["sample", "smoke-test"],
+  "prompt": "When using the echo sample, keep responses short and state the observed input."
+}

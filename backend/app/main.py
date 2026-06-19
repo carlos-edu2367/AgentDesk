@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -6,18 +7,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from alembic.config import Config
 from alembic import command
 
+from app.db import database
 from app.storage.appdata import ensure_appdata_structure
+from app.tools.registry import register_core_tools
 from app.api import health, storage
-from app.api.routers import agents, teams, workspaces, providers, executions, skills, mcp, plugins, memories
+from app.api.routers import agents, teams, workspaces, providers, executions, skills, mcp, plugins, memories, tools, approvals, audit, logs
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentdesk.startup")
 
 def run_migrations():
-    current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ini_path = os.path.join(current_dir, "alembic.ini")
+    is_frozen = getattr(sys, "frozen", False)
+    if is_frozen:
+        # When packaged with PyInstaller, alembic files are extracted to AGENTDESK_BUNDLE_DIR
+        bundle_dir = os.environ.get("AGENTDESK_BUNDLE_DIR", getattr(sys, "_MEIPASS", ""))
+        ini_path = os.path.join(bundle_dir, "alembic.ini")
+        script_location = os.path.join(bundle_dir, "alembic")
+    else:
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        ini_path = os.path.join(current_dir, "alembic.ini")
+        script_location = os.path.join(current_dir, "alembic")
+
     alembic_cfg = Config(ini_path)
-    alembic_cfg.set_main_option("script_location", os.path.join(current_dir, "alembic"))
+    alembic_cfg.set_main_option("script_location", script_location)
     
     try:
         command.upgrade(alembic_cfg, "head")
@@ -30,9 +42,20 @@ def run_migrations():
 async def lifespan(app: FastAPI):
     ensure_appdata_structure()
     logger.info("AppData structure verified/created.")
-    
+
     run_migrations()
-    
+
+    register_core_tools()
+    logger.info("Core tools registered.")
+
+    db = database.SessionLocal()
+    try:
+        from app.mcp.service import MCPService
+        MCPService(db).list_servers()
+        logger.info("Cached MCP tools registered.")
+    finally:
+        db.close()
+
     yield
 
 app = FastAPI(title="AgentDesk API", version="0.1.0", lifespan=lifespan)
@@ -56,6 +79,10 @@ app.include_router(skills.router, prefix="/api")
 app.include_router(mcp.router, prefix="/api")
 app.include_router(plugins.router, prefix="/api")
 app.include_router(memories.router, prefix="/api")
+app.include_router(tools.router, prefix="/api")
+app.include_router(approvals.router, prefix="/api")
+app.include_router(audit.router, prefix="/api")
+app.include_router(logs.router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn

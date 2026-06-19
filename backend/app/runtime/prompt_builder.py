@@ -6,11 +6,21 @@ from app.tools.schemas import ToolDefinition
 
 
 class PromptBuilder:
-    def __init__(self, agent: Agent, execution: Execution, available_tools: List[ToolDefinition] = None, memory_context: str = ""):
+    def __init__(
+        self,
+        agent: Agent,
+        execution: Execution,
+        available_tools: List[ToolDefinition] = None,
+        skills_context: str = "",
+        memory_context: str = "",
+        operational_context: str = "",
+    ):
         self.agent = agent
         self.execution = execution
         self.available_tools = available_tools or []
+        self.skills_context = skills_context
         self.memory_context = memory_context
+        self.operational_context = operational_context
 
     def _get_system_rules(self) -> str:
         if self.available_tools:
@@ -48,6 +58,9 @@ Approval Mode: {self.execution.approval_mode}
         context += "Workspace IDs: " + (", ".join(self.execution.workspace_ids) if self.execution.workspace_ids else "None") + "\n"
         return context
 
+    def _get_operational_context(self) -> str:
+        return self.operational_context
+
     def _get_tools_instructions(self) -> str:
         if not self.available_tools:
             return ""
@@ -59,6 +72,10 @@ Approval Mode: {self.execution.approval_mode}
         lines.append("When you have your final answer, respond with ONLY:")
         lines.append('{"type": "final_answer", "content": "<your answer>"}')
         lines.append("")
+        if any(tool.name == "agent.call" for tool in self.available_tools):
+            lines.append("To delegate to a subagent, you may also respond with ONLY:")
+            lines.append('{"type": "subagent_call", "target_agent_id": "<agent_id>", "task": "<clear task>"}')
+            lines.append("")
         lines.append("Available tools:")
 
         for tool in self.available_tools:
@@ -74,6 +91,9 @@ Approval Mode: {self.execution.approval_mode}
     def _get_memory_context(self) -> str:
         return self.memory_context
 
+    def _get_skills_context(self) -> str:
+        return self.skills_context
+
     def _get_user_request(self) -> str:
         return self.execution.user_input
 
@@ -81,10 +101,12 @@ Approval Mode: {self.execution.approval_mode}
         parts = [
             self._get_system_rules(),
             self._get_agent_system_prompt(),
-            self._get_memory_context(),
             self._get_operation_mode(),
-            self._get_execution_context(),
+            self._get_operational_context(),
             self._get_tools_instructions(),
+            self._get_skills_context(),
+            self._get_memory_context(),
+            self._get_execution_context(),
         ]
         return "\n".join(filter(None, parts))
 

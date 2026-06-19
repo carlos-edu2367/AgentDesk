@@ -23,6 +23,19 @@ class ToolRegistry:
     def exists(self, name: str) -> bool:
         return name in self._tools
 
+    def unregister(self, name: str) -> None:
+        self._tools.pop(name, None)
+
+    def unregister_plugin(self, plugin_id: str) -> None:
+        for name, tool in list(self._tools.items()):
+            if getattr(tool, "source", "") == "plugin" and getattr(tool, "plugin_id", "") == plugin_id:
+                self.unregister(name)
+
+    def unregister_mcp_server(self, server_id: str) -> None:
+        for name, tool in list(self._tools.items()):
+            if getattr(tool, "source", "") == "mcp" and getattr(tool, "server_id", "") == server_id:
+                self.unregister(name)
+
     def get_definition(self, name: str) -> ToolDefinition:
         tool = self.get(name)
         return ToolDefinition(
@@ -33,6 +46,8 @@ class ToolRegistry:
             critical=tool.critical,
             input_schema=tool.input_schema,
             output_schema=tool.output_schema,
+            plugin_id=getattr(tool, "plugin_id", None),
+            server_id=getattr(tool, "server_id", None),
         )
 
     def list_all(self) -> List[ToolDefinition]:
@@ -42,16 +57,26 @@ class ToolRegistry:
         return [
             self.get_definition(name)
             for name, tool in self._tools.items()
-            if tool.capability == capability
+            if tool.capability == capability or (capability == "mcp" and getattr(tool, "source", "") == "mcp")
         ]
 
     def list_capabilities(self) -> List[CapabilityInfo]:
         from app.tools.capabilities import CAPABILITIES
 
         result = []
+        seen = set()
         for cap_name, tool_names in CAPABILITIES.items():
             existing = [t for t in tool_names if t in self._tools]
+            seen.add(cap_name)
             result.append(CapabilityInfo(name=cap_name, tools=existing))
+        dynamic: Dict[str, List[str]] = {}
+        for name, tool in self._tools.items():
+            if tool.capability and tool.capability not in seen:
+                dynamic.setdefault(tool.capability, []).append(name)
+            if getattr(tool, "source", "") == "mcp":
+                dynamic.setdefault("mcp", []).append(name)
+        for cap_name in sorted(dynamic):
+            result.append(CapabilityInfo(name=cap_name, tools=sorted(dynamic[cap_name])))
         return result
 
 
@@ -77,6 +102,8 @@ def register_core_tools() -> None:
     from app.tools.core.workspace import WorkspaceGetTool, WorkspaceListTool
     from app.tools.core.logs import LogsGetExecutionTool, LogsSearchTool
     from app.tools.core.memory import MemorySearchTool, MemoryCreateTool
+    from app.tools.core.agent_tools import AgentListTool, AgentCallTool
+    from app.tools.core.team_tools import TeamListTool, TeamExecuteTool
 
     core_tools = [
         # Read-only filesystem
@@ -102,6 +129,11 @@ def register_core_tools() -> None:
         # Memory
         MemorySearchTool(),
         MemoryCreateTool(),
+        # Agent/team orchestration
+        AgentListTool(),
+        AgentCallTool(),
+        TeamListTool(),
+        TeamExecuteTool(),
     ]
     for tool in core_tools:
         if not tool_registry.exists(tool.name):

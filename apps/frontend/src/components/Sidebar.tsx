@@ -5,9 +5,16 @@ import { useBackendHealth } from '../hooks/useBackendHealth'
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', exact: true },
   { path: '/agents', label: 'Agents' },
+  { path: '/teams', label: 'Teams' },
   { path: '/providers', label: 'Providers' },
   { path: '/workspaces', label: 'Workspaces' },
   { path: '/executions', label: 'Executions' },
+  { path: '/tools', label: 'Tools' },
+  { path: '/mcp', label: 'MCP Servers' },
+  { path: '/memory', label: 'Memory' },
+  { path: '/skills', label: 'Skills' },
+  { path: '/plugins', label: 'Plugins' },
+  { path: '/audit', label: 'Audit Logs' },
   { path: '/settings', label: 'Settings' },
 ]
 
@@ -46,7 +53,7 @@ export function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-slate-800">
-        <p className="text-xs text-slate-600">v0.1.0 — Phase 6</p>
+        <p className="text-xs text-slate-600">v0.1.0 - MVP</p>
       </div>
     </aside>
   )

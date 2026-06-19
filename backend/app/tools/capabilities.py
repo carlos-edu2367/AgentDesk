@@ -33,6 +33,14 @@ CAPABILITIES: Dict[str, List[str]] = {
         "memory.search",
         "memory.create",
     ],
+    "agent_control": [
+        "agent.list",
+        "agent.call",
+    ],
+    "team_control": [
+        "team.list",
+        "team.execute",
+    ],
 }
 
 CRITICAL_TOOLS = frozenset({
@@ -53,6 +61,10 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
     "http.request": "medium",
     "memory.search": "low",
     "memory.create": "low",
+    "agent.list": "low",
+    "agent.call": "medium",
+    "team.list": "low",
+    "team.execute": "medium",
 }
 
 TOOL_SUMMARIES: Dict[str, str] = {
@@ -64,6 +76,10 @@ TOOL_SUMMARIES: Dict[str, str] = {
     "http.request": "Make an HTTP request",
     "memory.search": "Search stored memories",
     "memory.create": "Store a new memory entry",
+    "agent.list": "List available agents",
+    "agent.call": "Call another agent as a subagent",
+    "team.list": "List available teams",
+    "team.execute": "Execute an agent team",
 }
 
 
@@ -83,8 +99,12 @@ def is_critical_tool(tool_name: str) -> bool:
 
 
 def get_risk_level(tool_name: str) -> str:
+    if tool_name.startswith("mcp."):
+        return "high"
     return TOOL_RISK_LEVELS.get(tool_name, "low")
 
 
 def get_tool_summary(tool_name: str) -> str:
+    if tool_name.startswith("mcp."):
+        return f"Execute MCP tool {tool_name}"
     return TOOL_SUMMARIES.get(tool_name, f"Execute {tool_name}")
