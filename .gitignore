@@ -47,3 +47,6 @@ playwright-report/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Brainstorming visual companion
+.superpowers/
