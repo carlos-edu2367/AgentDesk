@@ -14,6 +14,7 @@ class MockProvider(ModelProvider):
         self.mock_response_text = self.config.get("mock_response_text", "This is a mock response.")
         self.mock_error = self.config.get("mock_error", None)
         self.mock_chunks = self.config.get("mock_chunks", ["This ", "is ", "a ", "mock ", "response."])
+        self.mock_reasoning_chunks = self.config.get("mock_reasoning_chunks", [])
 
     async def health_check(self) -> ProviderHealth:
         if self.mock_error:
@@ -37,7 +38,17 @@ class MockProvider(ModelProvider):
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[ModelChunk, None]:
         if self.mock_error:
             raise ProviderError("MOCK_ERROR", self.mock_error)
-            
+
+        for reasoning in self.mock_reasoning_chunks:
+            yield ModelChunk(
+                provider_id=self.provider_id,
+                model=request.model,
+                content_delta="",
+                reasoning_delta=reasoning,
+                done=False
+            )
+            await asyncio.sleep(0.01)
+
         for chunk in self.mock_chunks:
             yield ModelChunk(
                 provider_id=self.provider_id,

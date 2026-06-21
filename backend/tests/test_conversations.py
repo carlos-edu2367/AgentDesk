@@ -75,6 +75,23 @@ def setup_agent(test_db):
     test_db.commit()
 
 
+@pytest.fixture
+def setup_reasoning_agent(test_db):
+    provider = schemas.ProviderCreate(
+        type=ProviderType.OLLAMA,
+        name="Reasoning Provider",
+        enabled=True,
+        config={"mock_reasoning_chunks": ["I should ", "answer."]},
+    )
+    provider_repo.create(test_db, obj_in=provider, id="prov_r")
+    agent = schemas.AgentCreate(
+        name="Reasoning Agent",
+        model_config=schemas.ModelConfig(provider_id="prov_r", model="test", stream=True),
+    )
+    agent_repo.create(test_db, obj_in=agent, id="agent_r")
+    test_db.commit()
+
+
 client = TestClient(app)
 
 
@@ -183,3 +200,24 @@ def test_build_conversation_history_excludes_current_and_unfinished(setup_agent,
     )
     history = build_conversation_history(test_db, conv.id, exclude_execution_id="exec_current")
     assert history == []
+
+
+def test_reasoning_emits_model_reasoning_chunk(setup_reasoning_agent, test_db):
+    from app.db.repositories.registry import execution_event_repo
+    from app.domain.enums import EventType
+
+    conv = client.post(
+        "/api/conversations", json={"type": "agent", "target_id": "agent_r"}
+    ).json()
+    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": "Hi"})
+    exec_id = r.json()["execution_id"]
+
+    time.sleep(1)
+
+    events = execution_event_repo.get_multi(test_db, limit=1000)
+    reasoning = [
+        e for e in events
+        if e.execution_id == exec_id and e.type == EventType.MODEL_REASONING_CHUNK
+    ]
+    assert len(reasoning) == 2
+    assert "".join(e.content["delta"] for e in reasoning) == "I should answer."

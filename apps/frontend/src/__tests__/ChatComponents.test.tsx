@@ -41,6 +41,21 @@ describe('AssistantTurn', () => {
     )
     expect(screen.getByText('read_file')).toBeInTheDocument()
   })
+
+  it('renders a collapsed team sub-thread for team turns', () => {
+    render(
+      <AssistantTurn
+        events={[
+          ev('subagent_call_requested', { target_agent_id: 'agent_analyst', task: 'collect' }),
+        ]}
+      />,
+    )
+    // The sub-thread toggle is present, collapsed by default.
+    expect(screen.getByText(/Team worked on this/)).toBeInTheDocument()
+    expect(screen.queryByText('agent_analyst')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText(/Team worked on this/))
+    expect(screen.getByText('agent_analyst')).toBeInTheDocument()
+  })
 })
 
 describe('ChatThread', () => {

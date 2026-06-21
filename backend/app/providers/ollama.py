@@ -143,7 +143,8 @@ class OllamaProvider(ModelProvider):
                         yield ModelChunk(
                             provider_id=self.provider_id,
                             model=request.model,
-                            content_delta=message.get("content", ""),
+                            content_delta=message.get("content", "") or "",
+                            reasoning_delta=message.get("thinking", "") or "",
                             done=done,
                             usage=usage
                         )

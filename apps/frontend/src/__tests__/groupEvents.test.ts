@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupTurnEvents } from '../lib/groupEvents'
+import { groupTurnEvents, groupTeamEvents } from '../lib/groupEvents'
 import type { ExecutionEvent } from '../types/domain'
 
 function ev(partial: Partial<ExecutionEvent> & { type: string; content?: Record<string, unknown> }): ExecutionEvent {
@@ -7,8 +7,8 @@ function ev(partial: Partial<ExecutionEvent> & { type: string; content?: Record<
     id: partial.id ?? Math.random().toString(36).slice(2),
     execution_id: 'exec_1',
     type: partial.type as ExecutionEvent['type'],
-    source: 'runtime',
-    source_id: 'agent_1',
+    source: partial.source ?? 'runtime',
+    source_id: partial.source_id ?? 'agent_1',
     content: partial.content ?? {},
     created_at: '2026-06-21T00:00:00',
   }
@@ -69,5 +69,37 @@ describe('groupTurnEvents', () => {
       ev({ type: 'execution_failed', content: { error: 'boom' } }),
     ])
     expect(view.error).toBe('boom')
+  })
+})
+
+describe('groupTeamEvents', () => {
+  it('groups member contributions by agent id', () => {
+    const members = groupTeamEvents([
+      ev({ type: 'subagent_call_requested', content: { target_agent_id: 'agent_analyst', task: 'collect data' } }),
+      ev({ type: 'subagent_started', source_id: 'agent_analyst' }),
+      ev({ type: 'subagent_completed', source_id: 'agent_analyst', content: { result: 'data ready' } }),
+    ])
+    expect(members).toHaveLength(1)
+    expect(members[0]).toMatchObject({
+      agentId: 'agent_analyst',
+      task: 'collect data',
+      result: 'data ready',
+      status: 'completed',
+    })
+  })
+
+  it('tracks multiple members and a failure', () => {
+    const members = groupTeamEvents([
+      ev({ type: 'subagent_call_requested', content: { target_agent_id: 'a1', task: 't1' } }),
+      ev({ type: 'subagent_call_requested', content: { target_agent_id: 'a2', task: 't2' } }),
+      ev({ type: 'subagent_failed', source_id: 'a2', content: { error: 'nope' } }),
+    ])
+    expect(members.map(m => m.agentId)).toEqual(['a1', 'a2'])
+    expect(members[1].status).toBe('failed')
+    expect(members[1].error).toBe('nope')
+  })
+
+  it('returns nothing for a non-team turn', () => {
+    expect(groupTeamEvents([ev({ type: 'agent_completed', content: { result: 'x' } })])).toEqual([])
   })
 })

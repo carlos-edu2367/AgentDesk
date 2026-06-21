@@ -1,8 +1,9 @@
 import type { ExecutionEvent } from '../../types/domain'
-import { groupTurnEvents } from '../../lib/groupEvents'
+import { groupTurnEvents, groupTeamEvents } from '../../lib/groupEvents'
 import { Markdown } from './Markdown'
 import { ThinkingBlock } from './ThinkingBlock'
 import { ToolCallChain } from './ToolCallChain'
+import { TeamSubThread } from './TeamSubThread'
 
 /**
  * Renders one assistant turn: the tool-call chain and thinking trace (the
@@ -19,10 +20,12 @@ export function AssistantTurn({
   pending?: boolean
 }) {
   const view = groupTurnEvents(events)
+  const teamMembers = groupTeamEvents(events)
   const answer = view.answer || fallbackResult || ''
 
   return (
     <div className="self-start max-w-[85%] rounded-lg rounded-bl-sm border border-slate-700 bg-slate-800/60 px-3 py-2">
+      <TeamSubThread members={teamMembers} />
       <ToolCallChain toolCalls={view.toolCalls} />
       <ThinkingBlock thinking={view.thinking} />
 
