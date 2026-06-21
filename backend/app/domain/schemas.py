@@ -169,6 +169,7 @@ class ExecutionBase(BaseModel):
     status: ExecutionStatus = ExecutionStatus.PENDING
     approval_mode: ApprovalMode = ApprovalMode.MANUAL
     workspace_ids: List[str] = Field(default_factory=list)
+    conversation_id: Optional[str] = None
 
 class ExecutionCreate(ExecutionBase):
     pass
@@ -202,6 +203,38 @@ class ExecutionEvent(ExecutionEventBase):
     id: str
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+# Conversation (multi-turn chat grouping executions)
+class ConversationBase(BaseModel):
+    type: ExecutionType
+    target_id: str
+    title: str = ""
+
+class ConversationCreate(ConversationBase):
+    pass
+
+class ConversationUpdate(BaseModel):
+    title: Optional[str] = None
+
+class Conversation(ConversationBase):
+    id: str
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class ConversationMessageRequest(BaseModel):
+    message: str
+    approval_mode: ApprovalMode = ApprovalMode.MANUAL
+    workspace_ids: List[str] = Field(default_factory=list)
+    stream: bool = True
+
+class ConversationTurn(BaseModel):
+    execution: "Execution"
+    events: List[ExecutionEvent] = Field(default_factory=list)
+
+class ConversationDetail(BaseModel):
+    conversation: Conversation
+    turns: List[ConversationTurn] = Field(default_factory=list)
 
 # Outros
 class SkillBase(BaseModel):

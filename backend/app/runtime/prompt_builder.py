@@ -14,6 +14,7 @@ class PromptBuilder:
         skills_context: str = "",
         memory_context: str = "",
         operational_context: str = "",
+        history: List[Dict[str, str]] = None,
     ):
         self.agent = agent
         self.execution = execution
@@ -21,6 +22,7 @@ class PromptBuilder:
         self.skills_context = skills_context
         self.memory_context = memory_context
         self.operational_context = operational_context
+        self.history = history or []
 
     def _get_system_rules(self) -> str:
         if self.available_tools:
@@ -115,5 +117,6 @@ Approval Mode: {self.execution.approval_mode}
         sys_prompt = self.build_system_prompt()
         if sys_prompt:
             messages.append({"role": "system", "content": sys_prompt})
+        messages.extend(self.history)
         messages.append({"role": "user", "content": self._get_user_request()})
         return messages

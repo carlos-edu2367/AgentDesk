@@ -19,6 +19,7 @@ export type EventType =
   | 'prompt_built'
   | 'model_request_started'
   | 'model_chunk'
+  | 'model_reasoning_chunk'
   | 'model_completed'
   | 'agent_completed'
   | 'execution_completed'
@@ -399,6 +400,38 @@ export interface ExecutionEvent {
   source_id: string
   content: Record<string, unknown>
   created_at: string
+}
+
+export interface Conversation {
+  id: string
+  type: 'agent' | 'team'
+  target_id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ConversationTurn {
+  execution: Execution
+  events: ExecutionEvent[]
+}
+
+export interface ConversationDetail {
+  conversation: Conversation
+  turns: ConversationTurn[]
+}
+
+export interface ConversationCreate {
+  type: 'agent' | 'team'
+  target_id: string
+  title?: string
+}
+
+export interface ConversationMessageRequest {
+  message: string
+  approval_mode?: ApprovalMode
+  workspace_ids?: string[]
+  stream?: boolean
 }
 
 export interface AuditLog {

@@ -151,12 +151,15 @@ class OpenRouterProvider(ModelProvider):
                         try:
                             data = json.loads(data_str)
                             choice = data.get("choices", [{}])[0]
-                            delta = choice.get("delta", {}).get("content", "")
-                            
+                            delta_obj = choice.get("delta", {})
+                            delta = delta_obj.get("content", "") or ""
+                            reasoning = delta_obj.get("reasoning", "") or ""
+
                             yield ModelChunk(
                                 provider_id=self.provider_id,
                                 model=request.model,
                                 content_delta=delta,
+                                reasoning_delta=reasoning,
                                 done=False
                             )
                         except json.JSONDecodeError:

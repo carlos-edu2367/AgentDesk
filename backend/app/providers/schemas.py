@@ -42,6 +42,7 @@ class ModelChunk(BaseModel):
     provider_id: str
     model: str
     content_delta: str = ""
+    reasoning_delta: str = ""
     done: bool = False
     usage: Optional[ChatUsage] = None
 

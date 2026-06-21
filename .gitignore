@@ -17,6 +17,8 @@ parts/
 sdist/
 var/
 wheels/
+# The Python "lib/" rule above must not swallow frontend source
+!apps/frontend/src/lib/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -47,3 +49,6 @@ playwright-report/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Brainstorming visual companion
+.superpowers/

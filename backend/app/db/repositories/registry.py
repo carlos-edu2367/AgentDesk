@@ -8,6 +8,7 @@ workspace_repo = BaseRepository[models.WorkspaceModel, schemas.WorkspaceCreate, 
 provider_repo = BaseRepository[models.ProviderModel, schemas.ProviderCreate, schemas.ProviderUpdate](models.ProviderModel)
 execution_repo = BaseRepository[models.ExecutionModel, schemas.ExecutionCreate, schemas.ExecutionUpdate](models.ExecutionModel)
 execution_event_repo = BaseRepository[models.ExecutionEventModel, schemas.ExecutionEventCreate, schemas.ExecutionEventCreate](models.ExecutionEventModel)
+conversation_repo = BaseRepository[models.ConversationModel, schemas.ConversationCreate, schemas.ConversationUpdate](models.ConversationModel)
 memory_repo = BaseRepository[models.MemoryModel, schemas.MemoryCreate, schemas.MemoryUpdate](models.MemoryModel)
 memory_embedding_repo = BaseRepository[models.MemoryEmbeddingModel, object, object](models.MemoryEmbeddingModel)
 memory_link_repo = BaseRepository[models.MemoryLinkModel, schemas.MemoryLinkCreate, schemas.MemoryLinkCreate](models.MemoryLinkModel)

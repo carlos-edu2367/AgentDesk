@@ -62,6 +62,15 @@ class WorkspaceModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class ConversationModel(Base):
+    __tablename__ = "conversations"
+    id = Column(String, primary_key=True)
+    type = Column(String)            # "agent" | "team"
+    target_id = Column(String)       # agent id or team id
+    title = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class ExecutionModel(Base):
     __tablename__ = "executions"
     id = Column(String, primary_key=True)
@@ -71,6 +80,7 @@ class ExecutionModel(Base):
     status = Column(String)
     approval_mode = Column(String)
     workspace_ids = Column(JSON, default=list)
+    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)

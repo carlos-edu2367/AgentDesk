@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState'
 import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
 import { agentsApi } from '../api/agents'
+import { conversationsApi } from '../api/conversations'
 import { executionsApi } from '../api/executions'
 import { skillsApi } from '../api/skills'
 import { teamsApi } from '../api/teams'
@@ -74,6 +75,15 @@ export function Teams() {
     }
     setShowForm(false)
     await load()
+  }
+
+  const handleChatTeam = async (team: Team) => {
+    try {
+      const conv = await conversationsApi.create({ type: 'team', target_id: team.id, title: team.name })
+      navigate(`/conversations/${conv.id}`)
+    } catch (e) {
+      alert(`Failed to start chat: ${e}`)
+    }
   }
 
   const handleDelete = async (team: Team) => {
@@ -156,6 +166,9 @@ export function Teams() {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
+                    <button className="btn-primary text-xs" onClick={() => handleChatTeam(team)}>
+                      Chat
+                    </button>
                     <button className="btn-secondary text-xs" onClick={() => setSelectedTeamId(team.id)}>
                       Select
                     </button>

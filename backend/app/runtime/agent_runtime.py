@@ -201,6 +201,18 @@ class AgentRuntime:
                         {"error": str(exc)}
                     )
 
+                history = []
+                if self.db:
+                    try:
+                        from app.runtime.history import build_conversation_history
+                        history = build_conversation_history(
+                            self.db,
+                            getattr(execution, "conversation_id", None),
+                            execution.id,
+                        )
+                    except Exception:
+                        history = []
+
                 builder = PromptBuilder(
                     agent,
                     execution,
@@ -208,6 +220,7 @@ class AgentRuntime:
                     skills_context=skills_context,
                     memory_context=memory_context,
                     operational_context=runtime_options.get("operational_context", ""),
+                    history=history,
                 )
                 messages = builder.build_messages()
                 yield self._make_event(
@@ -235,11 +248,18 @@ class AgentRuntime:
                 final_text = ""
                 if stream:
                     async for chunk in provider.stream_chat(request):
-                        final_text += chunk.content_delta
-                        yield self._make_event(
-                            execution_id, EventType.MODEL_CHUNK, "model", provider_config.id,
-                            {"delta": chunk.content_delta}
-                        )
+                        reasoning_delta = getattr(chunk, "reasoning_delta", "") or ""
+                        if reasoning_delta:
+                            yield self._make_event(
+                                execution_id, EventType.MODEL_REASONING_CHUNK, "model", provider_config.id,
+                                {"delta": reasoning_delta}
+                            )
+                        if chunk.content_delta:
+                            final_text += chunk.content_delta
+                            yield self._make_event(
+                                execution_id, EventType.MODEL_CHUNK, "model", provider_config.id,
+                                {"delta": chunk.content_delta}
+                            )
                 else:
                     response = await provider.chat(request)
                     final_text = response.content
