@@ -55,6 +55,17 @@ describe('groupTurnEvents', () => {
     })
   })
 
+  it('does not show streamed tool-call JSON as the assistant answer', () => {
+    const view = groupTurnEvents([
+      ev({ type: 'model_chunk', content: { delta: '{"type": "tool_call", "tool": "http.request"}' } }),
+      ev({ id: 't1', type: 'tool_call_requested', content: { tool: 'http.request', arguments: { url: 'https://example.com' } } }),
+      ev({ type: 'tool_call_validated', content: { tool: 'http.request' } }),
+    ])
+
+    expect(view.answer).toBe('')
+    expect(view.toolCalls).toHaveLength(1)
+  })
+
   it('marks failed tool calls', () => {
     const view = groupTurnEvents([
       ev({ type: 'tool_call_requested', content: { tool: 'write_file' } }),

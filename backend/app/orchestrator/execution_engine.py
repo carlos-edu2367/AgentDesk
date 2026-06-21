@@ -11,7 +11,7 @@ from app.domain.schemas import ExecutionEventCreate, Provider, Agent, ExecutionU
 from app.domain.enums import EventType, ExecutionStatus, ApprovalStatus
 from app.domain.utils import generate_id
 from app.domain.utils import sanitize_for_output
-from app.runtime.agent_runtime import AgentRuntime
+from app.runtime.agent_runtime import AgentRuntime, _compact_tool_result_for_model
 from app.tools.base import ToolExecutionContext
 from app.tools.registry import tool_registry
 from app.tools.errors import ToolError
@@ -231,7 +231,7 @@ class ExecutionEngine:
                         "type": "tool_result",
                         "tool": tool_name,
                         "status": "success",
-                        "result": result,
+                        "result": _compact_tool_result_for_model(result),
                     })})
 
                 except ToolError as exc:

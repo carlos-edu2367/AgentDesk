@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { Teams } from '../views/Teams'
 import { teamsApi } from '../api/teams'
 import { executionsApi } from '../api/executions'
+import { conversationsApi } from '../api/conversations'
 
 const navigate = vi.fn()
 
@@ -32,6 +33,20 @@ vi.mock('../api/teams', () => ({
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+  },
+}))
+
+vi.mock('../api/conversations', () => ({
+  conversationsApi: {
+    list: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue({
+      id: 'conv_new_team',
+      type: 'team',
+      target_id: 'team_001',
+      title: 'Research Team',
+      created_at: '',
+      updated_at: '',
+    }),
   },
 }))
 
@@ -99,6 +114,19 @@ vi.mock('../hooks/useBackendHealth', () => ({
 }))
 
 describe('Teams page', () => {
+  beforeEach(() => {
+    navigate.mockReset()
+    vi.mocked(conversationsApi.list).mockResolvedValue([])
+    vi.mocked(conversationsApi.create).mockResolvedValue({
+      id: 'conv_new_team',
+      type: 'team',
+      target_id: 'team_001',
+      title: 'Research Team',
+      created_at: '',
+      updated_at: '',
+    })
+  })
+
   it('renders configured teams', async () => {
     render(<MemoryRouter><Teams /></MemoryRouter>)
     await waitFor(() => {
@@ -123,6 +151,30 @@ describe('Teams page', () => {
         stream: true,
       })
       expect(navigate).toHaveBeenCalledWith('/executions/exec_team_001')
+    })
+  })
+
+  it('continues the latest existing team chat', async () => {
+    vi.mocked(conversationsApi.list).mockResolvedValueOnce([
+      {
+        id: 'conv_existing_team',
+        type: 'team',
+        target_id: 'team_001',
+        title: 'Previous team chat',
+        created_at: '2026-06-20T00:00:00Z',
+        updated_at: '2026-06-21T00:00:00Z',
+      },
+    ])
+
+    render(<MemoryRouter><Teams /></MemoryRouter>)
+    await waitFor(() => expect(screen.getAllByText('Research Team').length).toBeGreaterThan(0))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Chat' }))
+
+    await waitFor(() => {
+      expect(conversationsApi.list).toHaveBeenCalledWith({ type: 'team', target_id: 'team_001' })
+      expect(conversationsApi.create).not.toHaveBeenCalled()
+      expect(navigate).toHaveBeenCalledWith('/conversations/conv_existing_team')
     })
   })
 

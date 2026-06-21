@@ -40,6 +40,11 @@ export function Agents() {
 
   const handleChat = async (agent: Agent) => {
     try {
+      const existing = await conversationsApi.list({ type: 'agent', target_id: agent.id })
+      if (existing[0]) {
+        navigate(`/conversations/${existing[0].id}`)
+        return
+      }
       const conv = await conversationsApi.create({ type: 'agent', target_id: agent.id, title: agent.name })
       navigate(`/conversations/${conv.id}`)
     } catch (e) {

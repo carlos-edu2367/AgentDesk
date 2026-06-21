@@ -128,7 +128,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
   })
 
   return {
-    answer: finalAnswer || streamed,
+    answer: finalAnswer || (toolCalls.length > 0 ? '' : streamed),
     thinking,
     toolCalls,
     error,

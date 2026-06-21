@@ -11,6 +11,7 @@ import { WorkspaceForm } from './views/WorkspaceForm'
 import { Executions } from './views/Executions'
 import { ExecutionDetail } from './views/ExecutionDetail'
 import { RunAgent } from './views/RunAgent'
+import { Conversations } from './views/Conversations'
 import { ConversationView } from './views/ConversationView'
 import { Settings } from './views/Settings'
 import { Tools } from './views/Tools'
@@ -47,6 +48,7 @@ export function App() {
           <Route path="executions/run" element={<RunAgent />} />
           <Route path="executions/:id" element={<ExecutionDetail />} />
 
+          <Route path="conversations" element={<Conversations />} />
           <Route path="conversations/:id" element={<ConversationView />} />
 
           <Route path="tools" element={<Tools />} />

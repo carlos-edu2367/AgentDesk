@@ -79,6 +79,11 @@ export function Teams() {
 
   const handleChatTeam = async (team: Team) => {
     try {
+      const existing = await conversationsApi.list({ type: 'team', target_id: team.id })
+      if (existing[0]) {
+        navigate(`/conversations/${existing[0].id}`)
+        return
+      }
       const conv = await conversationsApi.create({ type: 'team', target_id: team.id, title: team.name })
       navigate(`/conversations/${conv.id}`)
     } catch (e) {

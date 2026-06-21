@@ -7,7 +7,7 @@ import type {
 } from '../types/domain'
 
 export const conversationsApi = {
-  list: (params?: { type?: string; target_id?: string }) =>
+  list: (params?: { type?: string; target_id?: string; limit?: number }) =>
     api.get<Conversation[]>('/api/conversations', params),
   get: (id: string) => api.get<ConversationDetail>(`/api/conversations/${id}`),
   create: (data: ConversationCreate) =>

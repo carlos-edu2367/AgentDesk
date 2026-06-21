@@ -8,7 +8,7 @@ from app.domain.schemas import (
 )
 from app.domain.enums import EventType, ApprovalStatus, ApprovalMode
 from app.domain.utils import generate_id
-from app.domain.utils import sanitize_for_output
+from app.domain.utils import mask_secrets, sanitize_for_output
 from app.providers import provider_registry, ChatRequest, ChatMessage, ProviderError
 from app.tools.base import ToolExecutionContext
 from app.tools.capabilities import CRITICAL_TOOLS, get_risk_level, get_tool_summary
@@ -23,6 +23,42 @@ from .parser import OutputParser
 
 MAX_STEPS = 10
 TOOL_RESULT_PREVIEW_BYTES = 4_000
+TOOL_MODEL_RESULT_MAX_BYTES = 12_000
+TOOL_MODEL_BODY_MAX_CHARS = 8_000
+
+
+def _compact_tool_result_for_model(result: Any) -> Any:
+    """Keep tool feedback small enough for the next model turn."""
+    original_body_chars = None
+    if isinstance(result, dict) and isinstance(result.get("body"), str):
+        original_body_chars = len(result["body"])
+
+    safe_result = mask_secrets(result)
+    try:
+        encoded = json.dumps(safe_result, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return {"result": str(safe_result)[:TOOL_MODEL_RESULT_MAX_BYTES], "truncated_for_model": True}
+
+    if len(encoded) <= TOOL_MODEL_RESULT_MAX_BYTES:
+        return safe_result
+
+    if isinstance(safe_result, dict) and isinstance(safe_result.get("body"), str):
+        body = safe_result["body"]
+        compacted = dict(safe_result)
+        compacted["body"] = body[:TOOL_MODEL_BODY_MAX_CHARS]
+        compacted["body_truncated_for_model"] = True
+        compacted["original_body_chars"] = original_body_chars or len(body)
+        try:
+            if len(json.dumps(compacted, ensure_ascii=False)) <= TOOL_MODEL_RESULT_MAX_BYTES:
+                return compacted
+        except (TypeError, ValueError):
+            pass
+
+    return {
+        "result_preview": encoded[:TOOL_MODEL_RESULT_MAX_BYTES],
+        "truncated_for_model": True,
+        "original_result_chars": len(encoded),
+    }
 
 
 class AgentRuntime:
@@ -426,7 +462,7 @@ class AgentRuntime:
                         "type": "tool_result",
                         "tool": tool_name,
                         "status": "success",
-                        "result": result,
+                        "result": _compact_tool_result_for_model(result),
                     })})
 
                 except ToolError as exc:

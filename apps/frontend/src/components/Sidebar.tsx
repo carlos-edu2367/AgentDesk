@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { path: '/providers', label: 'Providers' },
   { path: '/workspaces', label: 'Workspaces' },
   { path: '/executions', label: 'Executions' },
+  { path: '/conversations', label: 'Chats' },
   { path: '/tools', label: 'Tools' },
   { path: '/mcp', label: 'MCP Servers' },
   { path: '/memory', label: 'Memory' },
