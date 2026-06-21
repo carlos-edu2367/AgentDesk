@@ -8,6 +8,15 @@ import { conversationsApi } from '../api/conversations'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
 import type { ConversationDetail } from '../types/domain'
 
+// Backend events that mark the end of a turn (agent or team).
+const TERMINAL_EVENT_TYPES = new Set([
+  'execution_completed',
+  'execution_failed',
+  'execution_cancelled',
+  'team_completed',
+  'team_failed',
+])
+
 export function ConversationView() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -44,23 +53,39 @@ export function ConversationView() {
       .finally(() => setLoading(false))
   }, [id])
 
-  // When the streaming turn finishes, fold it into the persisted detail.
+  // Fold the streaming turn into persisted history once the backend emits a
+  // terminal event. We key off the events (not `connectionStatus`) because the
+  // hook's status starts at 'closed' before the SSE opens — reacting to that
+  // would tear the stream down immediately.
   useEffect(() => {
-    if (connectionStatus === 'closed' && activeExecutionId) {
+    if (!activeExecutionId) return
+    // Match on execution_id: when switching turns, liveEvents can briefly still
+    // hold the previous turn's terminal event before the hook resets it.
+    const finished = liveEvents.some(
+      e => e.execution_id === activeExecutionId && TERMINAL_EVENT_TYPES.has(e.type),
+    )
+    if (finished) {
       fetchDetail().then(() => {
         setActiveExecutionId(null)
         setPendingInput('')
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionStatus, activeExecutionId])
+  }, [liveEvents, activeExecutionId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [liveEvents, detail])
 
+  // Only events belonging to the active execution (liveEvents can briefly carry
+  // the previous turn's events across a turn switch).
+  const activeEvents = useMemo(
+    () => liveEvents.filter(e => e.execution_id === activeExecutionId),
+    [liveEvents, activeExecutionId],
+  )
+
   const turns: ChatTurnVM[] = useMemo(() => {
-    const persisted = (detail?.turns ?? []).map(t => ({
+    const persisted: ChatTurnVM[] = (detail?.turns ?? []).map(t => ({
       id: t.execution.id,
       userInput: t.execution.user_input,
       events: t.events,
@@ -71,17 +96,16 @@ export function ConversationView() {
       persisted.push({
         id: activeExecutionId,
         userInput: pendingInput,
-        events: liveEvents,
+        events: activeEvents,
         result: null,
-        // @ts-expect-error pending is part of ChatTurnVM
-        pending: connectionStatus !== 'closed',
+        pending: true,
       })
     }
     return persisted
-  }, [detail, activeExecutionId, pendingInput, liveEvents, connectionStatus])
+  }, [detail, activeExecutionId, pendingInput, activeEvents])
 
   const drawerEvents = activeExecutionId
-    ? liveEvents
+    ? activeEvents
     : detail?.turns[detail.turns.length - 1]?.events ?? []
 
   const handleSend = async (e: React.FormEvent) => {
