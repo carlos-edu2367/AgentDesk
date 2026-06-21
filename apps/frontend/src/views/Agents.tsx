@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { agentsApi } from '../api/agents'
+import { conversationsApi } from '../api/conversations'
 import type { Agent } from '../types/domain'
 
 export function Agents() {
@@ -34,6 +35,15 @@ export function Agents() {
       setAgents(prev => prev.filter(a => a.id !== id))
     } catch (e) {
       alert(`Failed to delete: ${e}`)
+    }
+  }
+
+  const handleChat = async (agent: Agent) => {
+    try {
+      const conv = await conversationsApi.create({ type: 'agent', target_id: agent.id, title: agent.name })
+      navigate(`/conversations/${conv.id}`)
+    } catch (e) {
+      alert(`Failed to start chat: ${e}`)
     }
   }
 
@@ -77,6 +87,12 @@ export function Agents() {
                 </div>
               </div>
               <div className="flex gap-2 shrink-0">
+                <button
+                  className="btn-primary text-xs"
+                  onClick={() => handleChat(agent)}
+                >
+                  Chat
+                </button>
                 <button
                   className="btn-secondary text-xs"
                   onClick={() => navigate(`/executions/run?agent=${agent.id}`)}
