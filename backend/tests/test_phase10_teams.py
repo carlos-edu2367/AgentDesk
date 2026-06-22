@@ -86,10 +86,15 @@ def test_execute_team_via_api_runs_leader_managed_flow(client):
     try:
         execution = execution_repo.get(db, id=execution_id)
         assert execution.status == ExecutionStatus.COMPLETED
+        # Query the full event set for this execution: a leader can now run many
+        # delegation steps, so a fixed 200-row cap could truncate the final
+        # finalize/complete events.
         events = [
             e.type
-            for e in execution_event_repo.get_multi(db, limit=200)
-            if e.execution_id == execution_id
+            for e in db.query(execution_event_repo.model)
+            .filter(execution_event_repo.model.execution_id == execution_id)
+            .order_by(execution_event_repo.model.created_at.asc())
+            .all()
         ]
     finally:
         db.close()

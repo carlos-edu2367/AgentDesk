@@ -20,6 +20,7 @@ from .event_bus import event_bus
 DEFAULT_MAX_SUBAGENT_DEPTH = 5
 DEFAULT_MAX_SUBAGENT_CALLS = 20
 DEFAULT_MAX_TEAM_STEPS = 30
+DEFAULT_MAX_MEMBER_STEPS = 25
 DEFAULT_MAX_MEMBER_RETRIES = 2
 
 
@@ -106,13 +107,21 @@ class TeamExecutionEngine:
 
             runtime = AgentRuntime(db_session=db)
             result = ""
+            # The leader needs enough steps to explore, delegate to several
+            # members, review their work, and finalize. The hardcoded
+            # MAX_STEPS=10 was far too low for that and made the leader give up
+            # with "reached maximum steps" mid-coordination. A per-chat budget
+            # (execution.max_steps) overrides the team default when configured.
+            leader_max_steps = getattr(execution, "max_steps", None) or DEFAULT_MAX_TEAM_STEPS
             runtime_options = {
                 "team_id": team_id,
                 "include_team_memory": bool((team.memory_config or {}).get("use_team_memory", True)),
                 "subagent_depth": 0,
                 "max_subagent_depth": DEFAULT_MAX_SUBAGENT_DEPTH,
                 "max_subagent_calls": DEFAULT_MAX_SUBAGENT_CALLS,
-                "max_team_steps": DEFAULT_MAX_TEAM_STEPS,
+                "max_steps": leader_max_steps,
+                "max_member_steps": DEFAULT_MAX_MEMBER_STEPS,
+                "max_team_steps": leader_max_steps,
                 "max_member_retries": DEFAULT_MAX_MEMBER_RETRIES,
                 "operational_context": self._build_team_context(db, team),
             }

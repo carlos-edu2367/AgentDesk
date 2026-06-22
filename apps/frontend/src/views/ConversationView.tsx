@@ -31,6 +31,9 @@ export function ConversationView() {
   const [logsOpen, setLogsOpen] = useState(false)
   const [approvalMode, setApprovalMode] = useState<ApprovalMode>('manual')
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null)
+  // Per-chat step budget (empty = use engine default). Kept as a string so the
+  // input can be cleared; coerced to a number/null when persisted and sent.
+  const [maxStepsInput, setMaxStepsInput] = useState('')
 
   // Sibling chats (same agent/team) for the left rail + new-chat action.
   const [siblings, setSiblings] = useState<Conversation[]>([])
@@ -56,6 +59,7 @@ export function ConversationView() {
     if (d) {
       setDetail(d)
       setWorkspaceIds(d.conversation.workspace_ids ?? [])
+      setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
     }
   }
 
@@ -79,6 +83,7 @@ export function ConversationView() {
       .then(d => {
         setDetail(d)
         setWorkspaceIds(d.conversation.workspace_ids ?? [])
+        setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
         loadSiblings(d.conversation)
       })
       .catch(e => setError(String(e)))
@@ -145,6 +150,26 @@ export function ConversationView() {
     ? activeEvents
     : detail?.turns[detail.turns.length - 1]?.events ?? []
 
+  // Parse the step-limit input into a positive integer, or null when blank/invalid.
+  const parsedMaxSteps = (): number | null => {
+    const n = parseInt(maxStepsInput, 10)
+    return Number.isFinite(n) && n > 0 ? n : null
+  }
+
+  const persistMaxSteps = async () => {
+    if (!id) return
+    const value = parsedMaxSteps()
+    // Normalize the field so an invalid/blank entry shows as cleared.
+    setMaxStepsInput(value != null ? String(value) : '')
+    if (value === (detail?.conversation.max_steps ?? null)) return
+    try {
+      await conversationsApi.update(id, { max_steps: value })
+      setDetail(d => (d ? { ...d, conversation: { ...d.conversation, max_steps: value } } : d))
+    } catch (err) {
+      setError(String(err))
+    }
+  }
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!id || !message.trim() || sending) return
@@ -158,6 +183,7 @@ export function ConversationView() {
         stream: true,
         approval_mode: approvalMode,
         workspace_ids: workspaceIds,
+        max_steps: parsedMaxSteps(),
       })
       setMessage('')
       setPendingInput(text)
@@ -337,15 +363,30 @@ export function ConversationView() {
           </div>
 
           <form onSubmit={handleSend} className="mt-3 grid grid-cols-[1fr_auto] gap-2 items-end">
-            <label className="col-span-2 inline-flex select-none items-center gap-2 text-xs text-slate-300">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-600 bg-slate-900"
-                checked={approvalMode === 'auto'}
-                onChange={e => setApprovalMode(e.target.checked ? 'auto' : 'manual')}
-              />
-              Auto-approval
-            </label>
+            <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300">
+              <label className="inline-flex select-none items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                  checked={approvalMode === 'auto'}
+                  onChange={e => setApprovalMode(e.target.checked ? 'auto' : 'manual')}
+                />
+                Auto-approval
+              </label>
+              <label className="inline-flex select-none items-center gap-2">
+                <span>Step limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  className="form-input h-7 w-20 text-xs"
+                  value={maxStepsInput}
+                  placeholder={isTeam ? '30' : '10'}
+                  onChange={e => setMaxStepsInput(e.target.value)}
+                  onBlur={persistMaxSteps}
+                  title="Max runtime steps for this chat. Leave blank to use the default."
+                />
+              </label>
+            </div>
             <textarea
               className="form-textarea flex-1 min-h-[52px] max-h-40"
               value={message}

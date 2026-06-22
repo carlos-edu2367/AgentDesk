@@ -103,6 +103,7 @@ describe('ConversationView', () => {
       stream: true,
       approval_mode: 'manual',
       workspace_ids: [],
+      max_steps: null,
     }))
   })
 
@@ -119,6 +120,7 @@ describe('ConversationView', () => {
       stream: true,
       approval_mode: 'auto',
       workspace_ids: [],
+      max_steps: null,
     }))
   })
 

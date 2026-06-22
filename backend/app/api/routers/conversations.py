@@ -103,6 +103,8 @@ def post_message(
     # chat inherits the workspaces granted to the conversation. Without this the
     # chat never grants any workspace and write/terminal tools fail.
     workspace_ids = req.workspace_ids or list(conv.workspace_ids or [])
+    # Per-message override wins; otherwise inherit the chat's configured step budget.
+    max_steps = req.max_steps if req.max_steps is not None else conv.max_steps
 
     new_id = generate_id("execution")
     execution_in = schemas.ExecutionCreate(
@@ -112,6 +114,7 @@ def post_message(
         status=ExecutionStatus.PENDING,
         approval_mode=req.approval_mode,
         workspace_ids=workspace_ids,
+        max_steps=max_steps,
         conversation_id=id,
     )
     execution_repo.create(db, obj_in=execution_in, id=new_id)

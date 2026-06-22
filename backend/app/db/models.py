@@ -69,6 +69,7 @@ class ConversationModel(Base):
     target_id = Column(String)       # agent id or team id
     title = Column(String, default="")
     workspace_ids = Column(JSON, default=list)  # workspaces granted to this chat
+    max_steps = Column(Integer, nullable=True)  # per-chat runtime step budget; NULL = engine default
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -81,6 +82,7 @@ class ExecutionModel(Base):
     status = Column(String)
     approval_mode = Column(String)
     workspace_ids = Column(JSON, default=list)
+    max_steps = Column(Integer, nullable=True)  # resolved per-chat step budget; NULL = engine default
     conversation_id = Column(String, ForeignKey("conversations.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

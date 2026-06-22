@@ -408,6 +408,7 @@ export interface Conversation {
   target_id: string
   title: string
   workspace_ids: string[]
+  max_steps?: number | null
   created_at: string
   updated_at: string
 }
@@ -415,6 +416,7 @@ export interface Conversation {
 export interface ConversationUpdate {
   title?: string
   workspace_ids?: string[]
+  max_steps?: number | null
 }
 
 export interface ConversationTurn {
@@ -437,6 +439,7 @@ export interface ConversationMessageRequest {
   message: string
   approval_mode?: ApprovalMode
   workspace_ids?: string[]
+  max_steps?: number | null
   stream?: boolean
 }
 

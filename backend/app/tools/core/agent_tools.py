@@ -8,10 +8,27 @@ from app.tools.errors import ToolDeniedError, ToolError
 
 
 DEFAULT_MAX_SUBAGENT_DEPTH = 5
+DEFAULT_MAX_MEMBER_STEPS = 25
 
 
-def _save_event(context: ToolExecutionContext, event: ExecutionEventCreate) -> None:
-    execution_event_repo.create(context.db, obj_in=event, id=generate_id("event"))
+async def _emit(context: ToolExecutionContext, event: ExecutionEventCreate) -> None:
+    """Persist an event AND publish it on the event_bus so the SSE stream shows
+    subagent/member activity live. Subagent runtimes run *inside* the leader's
+    blocking ``tool.execute`` call, so their events never get yielded back up to
+    the engine — they must be published here or the UI stays silent until reload.
+    """
+    # Imported lazily: app.orchestrator.__init__ pulls in the execution engine,
+    # which imports the runtime → tool registry → this module, so a top-level
+    # import would create a circular dependency at startup.
+    from app.orchestrator.event_bus import event_bus
+
+    new_id = generate_id("event")
+    db_event = execution_event_repo.create(context.db, obj_in=event, id=new_id)
+    event_dict = event.model_dump()
+    event_dict["id"] = new_id
+    created_at = getattr(db_event, "created_at", None)
+    event_dict["created_at"] = created_at.isoformat() if created_at else None
+    await event_bus.publish(event.execution_id, event_dict)
 
 
 class AgentListTool(BaseTool):
@@ -93,7 +110,7 @@ class AgentCallTool(BaseTool):
             raise ToolError("PROVIDER_NOT_FOUND", f"Provider '{target_agent.llm_config.provider_id}' was not found")
         provider = Provider.model_validate(provider_model)
 
-        _save_event(context, ExecutionEventCreate(
+        await _emit(context, ExecutionEventCreate(
             execution_id=context.execution_id,
             type=EventType.SUBAGENT_CALL_REQUESTED,
             source="agent",
@@ -101,14 +118,14 @@ class AgentCallTool(BaseTool):
             content={"target_agent_id": target_agent_id, "task": task},
         ))
         if context.extra.get("team_id"):
-            _save_event(context, ExecutionEventCreate(
+            await _emit(context, ExecutionEventCreate(
                 execution_id=context.execution_id,
                 type=EventType.MEMBER_ASSIGNED,
                 source="agent",
                 source_id=context.agent_id,
                 content={"member_agent_id": target_agent_id, "task": task, "team_id": context.extra.get("team_id")},
             ))
-        _save_event(context, ExecutionEventCreate(
+        await _emit(context, ExecutionEventCreate(
             execution_id=context.execution_id,
             type=EventType.SUBAGENT_STARTED,
             source="subagent",
@@ -116,7 +133,7 @@ class AgentCallTool(BaseTool):
             content={"called_by": context.agent_id},
         ))
         if context.extra.get("team_id"):
-            _save_event(context, ExecutionEventCreate(
+            await _emit(context, ExecutionEventCreate(
                 execution_id=context.execution_id,
                 type=EventType.MEMBER_STARTED,
                 source="subagent",
@@ -146,23 +163,32 @@ class AgentCallTool(BaseTool):
         result = ""
         try:
             runtime = AgentRuntime(db_session=context.db)
+            member_max_steps = int(
+                context.extra.get("max_member_steps", DEFAULT_MAX_MEMBER_STEPS)
+            )
             async for event in runtime.run(
                 agent=target_agent,
                 execution=execution,
                 provider_config=provider,
-                stream=False,
+                # Stream the member so its tokens/tool-calls surface live, and
+                # so the provider read-timeout resets per chunk instead of
+                # waiting for one giant non-streamed completion (which routinely
+                # blew past the 60s timeout when writing whole files).
+                stream=True,
                 runtime_options={
                     "subagent_depth": depth + 1,
                     "max_subagent_depth": max_depth,
+                    "max_subagent_calls": context.extra.get("max_subagent_calls", 20),
+                    "max_steps": member_max_steps,
                     "team_id": context.extra.get("team_id"),
                     "include_team_memory": bool(context.extra.get("team_id")),
                 },
             ):
-                _save_event(context, event)
+                await _emit(context, event)
                 if event.type == EventType.AGENT_COMPLETED:
                     result = event.content.get("result", "")
 
-            _save_event(context, ExecutionEventCreate(
+            await _emit(context, ExecutionEventCreate(
                 execution_id=context.execution_id,
                 type=EventType.SUBAGENT_COMPLETED,
                 source="subagent",
@@ -170,7 +196,7 @@ class AgentCallTool(BaseTool):
                 content={"result": result},
             ))
             if context.extra.get("team_id"):
-                _save_event(context, ExecutionEventCreate(
+                await _emit(context, ExecutionEventCreate(
                     execution_id=context.execution_id,
                     type=EventType.MEMBER_COMPLETED,
                     source="subagent",
@@ -184,7 +210,7 @@ class AgentCallTool(BaseTool):
                     {"target_agent_id": target_agent_id, "team_id": context.extra.get("team_id")},
                 )
         except Exception as exc:
-            _save_event(context, ExecutionEventCreate(
+            await _emit(context, ExecutionEventCreate(
                 execution_id=context.execution_id,
                 type=EventType.SUBAGENT_FAILED,
                 source="subagent",
@@ -192,7 +218,7 @@ class AgentCallTool(BaseTool):
                 content={"error": str(exc)},
             ))
             if context.extra.get("team_id"):
-                _save_event(context, ExecutionEventCreate(
+                await _emit(context, ExecutionEventCreate(
                     execution_id=context.execution_id,
                     type=EventType.MEMBER_FAILED,
                     source="subagent",

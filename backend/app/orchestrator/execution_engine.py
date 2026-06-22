@@ -292,9 +292,16 @@ class ExecutionEngine:
         runtime = AgentRuntime(db_session=db)
         final_result = ""
 
+        # Honor the per-chat step budget when one was configured for this
+        # execution; otherwise the runtime falls back to its own default.
+        runtime_options = {}
+        if getattr(execution, "max_steps", None):
+            runtime_options["max_steps"] = execution.max_steps
+
         async for event in runtime.run(
             agent=agent, execution=execution, provider_config=provider_config,
-            stream=stream, initial_messages=initial_messages, initial_step=initial_step
+            stream=stream, initial_messages=initial_messages, initial_step=initial_step,
+            runtime_options=runtime_options,
         ):
             if self.is_cancelled(execution_id):
                 await self._emit_and_save_event(db, execution_id, ExecutionEventCreate(

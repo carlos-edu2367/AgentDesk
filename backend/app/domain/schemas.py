@@ -169,6 +169,7 @@ class ExecutionBase(BaseModel):
     status: ExecutionStatus = ExecutionStatus.PENDING
     approval_mode: ApprovalMode = ApprovalMode.MANUAL
     workspace_ids: List[str] = Field(default_factory=list)
+    max_steps: Optional[int] = None
     conversation_id: Optional[str] = None
 
 class ExecutionCreate(ExecutionBase):
@@ -211,6 +212,7 @@ class ConversationBase(BaseModel):
     target_id: str
     title: str = ""
     workspace_ids: List[str] = Field(default_factory=list)
+    max_steps: Optional[int] = None  # per-chat runtime step budget; None = engine default
 
     @field_validator("workspace_ids", mode="before")
     @classmethod
@@ -225,6 +227,7 @@ class ConversationCreate(ConversationBase):
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
     workspace_ids: Optional[List[str]] = None
+    max_steps: Optional[int] = None
 
 class Conversation(ConversationBase):
     id: str
@@ -236,6 +239,7 @@ class ConversationMessageRequest(BaseModel):
     message: str
     approval_mode: ApprovalMode = ApprovalMode.MANUAL
     workspace_ids: List[str] = Field(default_factory=list)
+    max_steps: Optional[int] = None  # per-message override; falls back to the chat's setting
     stream: bool = True
 
 class ConversationTurn(BaseModel):

@@ -189,6 +189,39 @@ def test_message_workspaces_override_conversation(setup_agent, test_db):
     assert execution.workspace_ids == ["ws_override"]
 
 
+def test_conversation_max_steps_persists_and_message_inherits(setup_agent, test_db):
+    conv = client.post(
+        "/api/conversations", json={"type": "agent", "target_id": "agent_1"}
+    ).json()
+    assert conv["max_steps"] is None
+
+    upd = client.patch(f"/api/conversations/{conv['id']}", json={"max_steps": 7})
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["max_steps"] == 7
+
+    # A message with no explicit budget inherits the chat's configured one.
+    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": "Hi"})
+    assert r.status_code == 200, r.text
+    execution = execution_repo.get(test_db, id=r.json()["execution_id"])
+    assert execution.max_steps == 7
+
+
+def test_message_max_steps_overrides_conversation(setup_agent, test_db):
+    conv = client.post(
+        "/api/conversations",
+        json={"type": "agent", "target_id": "agent_1", "max_steps": 5},
+    ).json()
+    assert conv["max_steps"] == 5
+
+    r = client.post(
+        f"/api/conversations/{conv['id']}/messages",
+        json={"message": "Hi", "max_steps": 12},
+    )
+    assert r.status_code == 200, r.text
+    execution = execution_repo.get(test_db, id=r.json()["execution_id"])
+    assert execution.max_steps == 12
+
+
 def test_build_conversation_history(setup_agent, test_db):
     from app.runtime.history import build_conversation_history
 

@@ -30,7 +30,10 @@ class OpenRouterProvider(ModelProvider):
         self.base_url = base_url.rstrip("/")
         self.config = config or {}
         self.api_key = self.config.get("api_key")
-        self.timeout = self.config.get("timeout", 60.0)
+        # 60s was too tight: a single non-trivial completion (especially a member
+        # writing whole files) routinely exceeded it and surfaced as
+        # "A requisição expirou (timeout)", killing the turn. Overridable per provider.
+        self.timeout = self.config.get("timeout", 300.0)
         
         if not self.api_key:
             raise ApiKeyMissingError()

@@ -328,6 +328,32 @@ class AgentRuntime:
                 "error_code": exc.code,
             }, False
 
+        except Exception as exc:
+            # Any other failure inside the tool — most importantly a ProviderError
+            # (e.g. a sub-agent's model call timing out) raised by agent.call.
+            # Surface it as a recoverable tool error instead of letting it bubble
+            # up and kill the whole turn, so the leader can retry, reassign, or
+            # finalize gracefully. One slow member must not abort the team.
+            message = getattr(exc, "message", None) or str(exc)
+            code = getattr(exc, "code", None) or "TOOL_EXECUTION_ERROR"
+            events.append(self._make_event(
+                execution_id, EventType.TOOL_FAILED, "tool", tool_name,
+                {"id": call_id, "tool": tool_name, "error": message, "code": code}
+            ))
+            self._save_audit_log(
+                execution_id, agent_id, "tool_failed",
+                f"Tool '{tool_name}' falhou: {message}",
+                {"id": call_id, "tool": tool_name, "arguments": tool_args, "error": message, "code": code},
+                risk_level=get_risk_level(tool_name) if is_critical else "low",
+            )
+            return events, {
+                "id": call_id,
+                "tool": tool_name,
+                "status": "error",
+                "error": message,
+                "error_code": code,
+            }, False
+
     async def run(
         self,
         agent: Agent,
@@ -468,7 +494,8 @@ class AgentRuntime:
                     {"messages": messages, "available_tools": [t.name for t in available_tools]}
                 )
 
-            for step in range(initial_step, MAX_STEPS):
+            max_steps = int(runtime_options.get("max_steps") or MAX_STEPS)
+            for step in range(initial_step, max_steps):
                 yield self._make_event(
                     execution_id, EventType.MODEL_REQUEST_STARTED, "runtime", provider_config.id,
                     {"model": agent.llm_config.model, "step": step, "stream": stream}

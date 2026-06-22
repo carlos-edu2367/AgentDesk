@@ -26,7 +26,9 @@ class OllamaProvider(ModelProvider):
         self.provider_id = provider_id
         self.base_url = base_url.rstrip("/")
         self.config = config or {}
-        self.timeout = self.config.get("timeout", 60.0)
+        # Local models can be slow to produce long completions; 60s was too tight
+        # and surfaced as request timeouts mid-turn. Overridable per provider.
+        self.timeout = self.config.get("timeout", 300.0)
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> httpx.Response:
         url = f"{self.base_url}{endpoint}"
