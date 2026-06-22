@@ -20,7 +20,15 @@ function UserBubble({ text }: { text: string }) {
 }
 
 /** Renders the conversation as alternating user / assistant turns. */
-export function ChatThread({ turns }: { turns: ChatTurnVM[] }) {
+export function ChatThread({
+  turns,
+  onResolveApproval,
+  resolvingApprovalId,
+}: {
+  turns: ChatTurnVM[]
+  onResolveApproval?: (executionId: string, approvalId: string, approved: boolean) => void
+  resolvingApprovalId?: string | null
+}) {
   if (turns.length === 0) {
     return (
       <p className="text-sm text-slate-500 text-center py-8">
@@ -33,7 +41,17 @@ export function ChatThread({ turns }: { turns: ChatTurnVM[] }) {
       {turns.map(turn => (
         <div key={turn.id} className="flex flex-col gap-2">
           <UserBubble text={turn.userInput} />
-          <AssistantTurn events={turn.events} fallbackResult={turn.result} pending={turn.pending} />
+          <AssistantTurn
+            events={turn.events}
+            fallbackResult={turn.result}
+            pending={turn.pending}
+            resolvingApprovalId={resolvingApprovalId}
+            onResolveApproval={
+              onResolveApproval
+                ? (approvalId, approved) => onResolveApproval(turn.id, approvalId, approved)
+                : undefined
+            }
+          />
         </div>
       ))}
     </div>

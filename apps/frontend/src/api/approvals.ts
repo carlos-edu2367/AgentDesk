@@ -15,10 +15,12 @@ export const approvalsApi = {
     executionId: string,
     approvalId: string,
     approved: boolean,
-    reason?: string
+    reason?: string,
+    approvalMode?: string,
   ): Promise<{ status: string }> =>
     api.post<{ status: string }>(`/api/executions/${executionId}/approvals/${approvalId}`, {
       approved,
       reason,
+      approval_mode: approvalMode,
     }),
 }

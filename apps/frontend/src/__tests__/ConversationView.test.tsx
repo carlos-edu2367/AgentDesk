@@ -5,11 +5,31 @@ import { ConversationView } from '../views/ConversationView'
 
 const sendMessage = vi.fn()
 const get = vi.fn()
+const list = vi.fn()
+const create = vi.fn()
+const update = vi.fn()
+const resolveApproval = vi.fn()
+const workspacesList = vi.fn()
 
 vi.mock('../api/conversations', () => ({
   conversationsApi: {
     get: (...args: unknown[]) => get(...args),
     sendMessage: (...args: unknown[]) => sendMessage(...args),
+    list: (...args: unknown[]) => list(...args),
+    create: (...args: unknown[]) => create(...args),
+    update: (...args: unknown[]) => update(...args),
+  },
+}))
+
+vi.mock('../api/workspaces', () => ({
+  workspacesApi: {
+    list: (...args: unknown[]) => workspacesList(...args),
+  },
+}))
+
+vi.mock('../api/approvals', () => ({
+  approvalsApi: {
+    resolve: (...args: unknown[]) => resolveApproval(...args),
   },
 }))
 
@@ -21,7 +41,15 @@ vi.mock('../hooks/useExecutionEvents', () => ({
 }))
 
 function ev(execution_id: string, type: string, content: Record<string, unknown> = {}) {
-  return { id: Math.random().toString(36).slice(2), execution_id, type, source: 'runtime', source_id: 'agent_1', content, created_at: '2026-06-21T00:00:00' }
+  return {
+    id: Math.random().toString(36).slice(2),
+    execution_id,
+    type,
+    source: 'runtime',
+    source_id: 'agent_1',
+    content,
+    created_at: '2026-06-21T00:00:00',
+  }
 }
 
 function renderAt(id: string) {
@@ -35,7 +63,7 @@ function renderAt(id: string) {
 }
 
 const baseDetail = {
-  conversation: { id: 'conv_1', type: 'agent', target_id: 'agent_1', title: 'Researcher', created_at: '', updated_at: '' },
+  conversation: { id: 'conv_1', type: 'agent', target_id: 'agent_1', title: 'Researcher', workspace_ids: [], created_at: '', updated_at: '' },
   turns: [],
 }
 
@@ -43,9 +71,19 @@ describe('ConversationView', () => {
   beforeEach(() => {
     get.mockReset()
     sendMessage.mockReset()
+    resolveApproval.mockReset()
+    list.mockReset()
+    create.mockReset()
+    update.mockReset()
+    workspacesList.mockReset()
     hookReturn = { events: [], connectionStatus: 'closed' }
     get.mockResolvedValue(baseDetail)
     sendMessage.mockResolvedValue({ execution_id: 'exec_new', conversation_id: 'conv_1', status: 'running' })
+    resolveApproval.mockResolvedValue({ status: 'approved' })
+    list.mockResolvedValue([])
+    create.mockResolvedValue({ id: 'conv_new' })
+    update.mockResolvedValue({})
+    workspacesList.mockResolvedValue([])
   })
 
   it('renders the conversation title', async () => {
@@ -53,19 +91,60 @@ describe('ConversationView', () => {
     await waitFor(() => expect(screen.getByText('Researcher')).toBeInTheDocument())
   })
 
-  it('sends a message and renders the user bubble', async () => {
+  it('sends chat messages with manual approval by default', async () => {
     renderAt('conv_1')
-    await waitFor(() => expect(screen.getByPlaceholderText('Send a message…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByPlaceholderText('Send a message…'), { target: { value: 'Hello agent' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hello agent' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('conv_1', { message: 'Hello agent', stream: true }))
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('conv_1', {
+      message: 'Hello agent',
+      stream: true,
+      approval_mode: 'manual',
+      workspace_ids: [],
+    }))
+  })
+
+  it('can switch to auto-approval via the checkbox', async () => {
+    renderAt('conv_1')
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Auto-approval' }))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Research with tools' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledWith('conv_1', {
+      message: 'Research with tools',
+      stream: true,
+      approval_mode: 'auto',
+      workspace_ids: [],
+    }))
+  })
+
+  it('resolves approvals inline from the active chat turn', async () => {
+    hookReturn = {
+      connectionStatus: 'open',
+      events: [
+        ev('exec_new', 'approval_requested', { approval_id: 'approval_1', tool: 'http.request' }),
+        ev('exec_new', 'execution_waiting_approval', { approval_id: 'approval_1' }),
+      ],
+    }
+    renderAt('conv_1')
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hi' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(screen.getByText('Approval required')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Approve tool call' }))
+
+    await waitFor(() => expect(resolveApproval).toHaveBeenCalledWith('exec_new', 'approval_1', true, undefined, 'manual'))
   })
 
   it('streams the live answer and does not fold on a stale terminal event from a previous turn', async () => {
     // liveEvents briefly carries a previous turn's terminal event plus the new
-    // turn's streaming chunk. The fold must NOT trigger (would kill the stream).
+    // turn's streaming chunk. The fold must not trigger and kill the stream.
     hookReturn = {
       connectionStatus: 'open',
       events: [
@@ -74,14 +153,12 @@ describe('ConversationView', () => {
       ],
     }
     renderAt('conv_1')
-    await waitFor(() => expect(screen.getByPlaceholderText('Send a message…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByPlaceholderText('Send a message…'), { target: { value: 'hi' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    // The streaming answer for the current turn renders...
     await waitFor(() => expect(screen.getByText('streaming answer')).toBeInTheDocument())
-    // ...and no fold refetch happened (get called only on initial mount).
     expect(get).toHaveBeenCalledTimes(1)
   })
 
@@ -91,12 +168,11 @@ describe('ConversationView', () => {
       events: [ev('exec_new', 'execution_completed')],
     }
     renderAt('conv_1')
-    await waitFor(() => expect(screen.getByPlaceholderText('Send a message…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
 
-    fireEvent.change(screen.getByPlaceholderText('Send a message…'), { target: { value: 'hi' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hi' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
-    // Fold triggers a second conversation fetch (initial + post-completion).
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
   })
 })

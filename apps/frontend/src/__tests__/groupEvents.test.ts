@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupTurnEvents, groupTeamEvents } from '../lib/groupEvents'
+import { groupTurnEvents, groupTeamEvents, stripProtocolJson } from '../lib/groupEvents'
 import type { ExecutionEvent } from '../types/domain'
 
 function ev(partial: Partial<ExecutionEvent> & { type: string; content?: Record<string, unknown> }): ExecutionEvent {
@@ -66,6 +66,16 @@ describe('groupTurnEvents', () => {
     expect(view.toolCalls).toHaveLength(1)
   })
 
+  it('surfaces narration prose around tool-call JSON while the turn streams', () => {
+    const view = groupTurnEvents([
+      ev({ type: 'model_chunk', content: { delta: 'Vou explorar o ambiente. 🚀' } }),
+      ev({ type: 'model_chunk', content: { delta: '{"type": "tool_calls", "calls": [{"id":"c1","tool":"workspace.list","arguments":{}}]}' } }),
+      ev({ id: 't1', type: 'tool_call_requested', content: { id: 'c1', tool: 'workspace.list' } }),
+    ])
+    expect(view.answer).toBe('Vou explorar o ambiente. 🚀')
+    expect(view.toolCalls).toHaveLength(1)
+  })
+
   it('marks failed tool calls', () => {
     const view = groupTurnEvents([
       ev({ type: 'tool_call_requested', content: { tool: 'write_file' } }),
@@ -75,11 +85,79 @@ describe('groupTurnEvents', () => {
     expect(view.toolCalls[0].error).toBe('denied path')
   })
 
+  it('exposes pending approvals and clears them after resolution', () => {
+    const pending = groupTurnEvents([
+      ev({
+        type: 'approval_requested',
+        content: {
+          approval_id: 'approval_1',
+          tool: 'http.request',
+          arguments: { url: 'https://example.com' },
+          risk_level: 'medium',
+          summary: 'Make an HTTP request',
+        },
+      }),
+      ev({ type: 'execution_waiting_approval', content: { approval_id: 'approval_1' } }),
+    ])
+
+    expect(pending.pendingApproval).toMatchObject({
+      approvalId: 'approval_1',
+      tool: 'http.request',
+      args: { url: 'https://example.com' },
+      riskLevel: 'medium',
+      summary: 'Make an HTTP request',
+    })
+
+    const resolved = groupTurnEvents([
+      ev({ type: 'approval_requested', content: { approval_id: 'approval_1', tool: 'http.request' } }),
+      ev({ type: 'approval_approved', content: { approval_id: 'approval_1' } }),
+    ])
+
+    expect(resolved.pendingApproval).toBeUndefined()
+  })
+
+  it('matches duplicate tool lifecycle events by call id', () => {
+    const view = groupTurnEvents([
+      ev({ type: 'tool_call_requested', content: { id: 'call_1', tool: 'http.request' } }),
+      ev({ type: 'tool_call_requested', content: { id: 'call_2', tool: 'http.request' } }),
+      ev({ type: 'tool_executed', content: { id: 'call_1', tool: 'http.request' } }),
+      ev({ type: 'tool_failed', content: { id: 'call_2', tool: 'http.request', error: 'boom' } }),
+    ])
+
+    expect(view.toolCalls).toHaveLength(2)
+    expect(view.toolCalls[0]).toMatchObject({ id: 'call_1', status: 'success' })
+    expect(view.toolCalls[1]).toMatchObject({ id: 'call_2', status: 'failed', error: 'boom' })
+  })
+
   it('captures turn-level errors', () => {
     const view = groupTurnEvents([
       ev({ type: 'execution_failed', content: { error: 'boom' } }),
     ])
     expect(view.error).toBe('boom')
+  })
+})
+
+describe('stripProtocolJson', () => {
+  it('keeps plain prose untouched', () => {
+    expect(stripProtocolJson('Hello world')).toBe('Hello world')
+  })
+
+  it('drops complete protocol JSON objects, keeping prose', () => {
+    expect(
+      stripProtocolJson('Vou criar.{"type":"tool_call","tool":"filesystem.write","arguments":{}}'),
+    ).toBe('Vou criar.')
+  })
+
+  it('drops a truncated trailing protocol object', () => {
+    expect(
+      stripProtocolJson('Já mapeei.{"type":"tool_calls","calls":[{"tool":"filesystem.write","arguments":{"content":"<html'),
+    ).toBe('Já mapeei.')
+  })
+
+  it('preserves braces inside JSON string values', () => {
+    expect(
+      stripProtocolJson('{"type":"final_answer","content":"use {x} here"}after'),
+    ).toBe('after')
   })
 })
 

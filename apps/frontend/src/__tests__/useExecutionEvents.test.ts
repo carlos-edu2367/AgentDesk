@@ -113,4 +113,30 @@ describe('useExecutionEvents', () => {
 
     expect(result.current.events).toHaveLength(0)
   })
+
+  it('reconnects when reconnectKey changes for the same executionId', async () => {
+    const instances: MockEventSource[] = []
+    vi.stubGlobal('EventSource', class extends MockEventSource {
+      constructor(url: string) {
+        super(url)
+        instances.push(this)
+        mockESInstance = this
+      }
+    })
+
+    const { rerender } = renderHook(
+      ({ reconnectKey }: { reconnectKey: number }) => useExecutionEvents('exec_1', reconnectKey),
+      { initialProps: { reconnectKey: 0 } },
+    )
+
+    expect(instances).toHaveLength(1)
+
+    await act(async () => {
+      rerender({ reconnectKey: 1 })
+    })
+
+    expect(instances).toHaveLength(2)
+    expect(instances[0].closed).toBe(true)
+    expect(instances[1].url).toContain('/api/executions/exec_1/events')
+  })
 })

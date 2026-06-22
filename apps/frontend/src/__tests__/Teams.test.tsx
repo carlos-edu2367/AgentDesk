@@ -122,6 +122,7 @@ describe('Teams page', () => {
       type: 'team',
       target_id: 'team_001',
       title: 'Research Team',
+      workspace_ids: [],
       created_at: '',
       updated_at: '',
     })
@@ -161,6 +162,7 @@ describe('Teams page', () => {
         type: 'team',
         target_id: 'team_001',
         title: 'Previous team chat',
+        workspace_ids: [],
         created_at: '2026-06-20T00:00:00Z',
         updated_at: '2026-06-21T00:00:00Z',
       },

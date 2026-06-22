@@ -63,6 +63,7 @@ describe('Agents list', () => {
       type: 'agent',
       target_id: 'agent_001',
       title: 'Test Agent',
+      workspace_ids: [],
       created_at: '',
       updated_at: '',
     })
@@ -96,6 +97,7 @@ describe('Agents list', () => {
         type: 'agent',
         target_id: 'agent_001',
         title: 'Previous chat',
+        workspace_ids: [],
         created_at: '2026-06-20T00:00:00Z',
         updated_at: '2026-06-21T00:00:00Z',
       },

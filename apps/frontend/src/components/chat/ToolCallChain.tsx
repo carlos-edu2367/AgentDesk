@@ -17,10 +17,23 @@ const STATUS_ICON: Record<ToolCallStatus, string> = {
   denied: '✗',
 }
 
+/** Short inline hint (file path, command, url…) so the chain reads as progress. */
+function argHint(call: ToolCallView): string | undefined {
+  const a = call.args
+  if (!a) return undefined
+  const raw = (a.path ?? a.source_path ?? a.url ?? a.command ?? a.target_agent_id) as
+    | string
+    | undefined
+  if (!raw) return undefined
+  const s = String(raw)
+  return s.length > 44 ? '…' + s.slice(-42) : s
+}
+
 function ToolCallCard({ call }: { call: ToolCallView }) {
   const [open, setOpen] = useState(false)
   const style = STATUS_STYLE[call.status]
   const hasDetail = !!call.args || !!call.resultPreview || !!call.error
+  const hint = argHint(call)
 
   return (
     <div className={`rounded-md border bg-slate-900/60 px-2.5 py-1.5 text-xs ${style}`}>
@@ -32,8 +45,9 @@ function ToolCallCard({ call }: { call: ToolCallView }) {
       >
         <span className="flex items-center gap-2 min-w-0">
           <span>🔧</span>
-          <span className="font-mono truncate">{call.tool}</span>
-          <span aria-label={call.status}>{STATUS_ICON[call.status]}</span>
+          <span className="font-mono shrink-0">{call.tool}</span>
+          {hint && <span className="font-mono text-slate-500 truncate">{hint}</span>}
+          <span aria-label={call.status} className="shrink-0">{STATUS_ICON[call.status]}</span>
         </span>
         {hasDetail && <span className="text-slate-500 shrink-0">{open ? '▲' : '▼'}</span>}
       </button>

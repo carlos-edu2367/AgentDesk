@@ -4,7 +4,7 @@ import { api } from '../api/client'
 
 type ConnectionStatus = 'connecting' | 'open' | 'closed' | 'error'
 
-export function useExecutionEvents(executionId: string | null) {
+export function useExecutionEvents(executionId: string | null, reconnectKey = 0) {
   const [events, setEvents] = useState<ExecutionEvent[]>([])
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('closed')
   const esRef = useRef<EventSource | null>(null)
@@ -29,7 +29,13 @@ export function useExecutionEvents(executionId: string | null) {
           setConnectionStatus('closed')
           return
         }
-        setEvents(prev => [...prev, raw as unknown as ExecutionEvent])
+        const incoming = raw as unknown as ExecutionEvent
+        setEvents(prev => {
+          // Dedup by id: on reconnect (e.g. after approval) the backend replays
+          // persisted events that may overlap with live ones still in flight.
+          if (incoming.id && prev.some(e => e.id === incoming.id)) return prev
+          return [...prev, incoming]
+        })
       } catch {
         // ignore malformed events
       }
@@ -45,7 +51,7 @@ export function useExecutionEvents(executionId: string | null) {
       esRef.current = null
       setConnectionStatus('closed')
     }
-  }, [executionId])
+  }, [executionId, reconnectKey])
 
   return { events, connectionStatus }
 }

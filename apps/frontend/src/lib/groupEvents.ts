@@ -5,11 +5,20 @@ export type ToolCallStatus = 'requested' | 'validated' | 'success' | 'failed' | 
 export interface ToolCallView {
   /** Stable key for rendering. */
   key: string
+  id?: string
   tool: string
   args?: Record<string, unknown>
   resultPreview?: string
   error?: string
   status: ToolCallStatus
+}
+
+export interface ApprovalView {
+  approvalId: string
+  tool: string
+  args?: Record<string, unknown>
+  riskLevel?: string
+  summary?: string
 }
 
 export type TeamMemberStatus = 'assigned' | 'running' | 'completed' | 'failed'
@@ -29,6 +38,8 @@ export interface TurnView {
   thinking: string
   /** Ordered chain of tool calls made during the turn. */
   toolCalls: ToolCallView[]
+  /** Pending approval requested by the backend, if this turn is paused. */
+  pendingApproval?: ApprovalView
   /** Error message if the turn failed. */
   error?: string
 }
@@ -39,8 +50,70 @@ const TOOL_REQUEST_TYPES = new Set([
   'mcp_tool_call_requested',
 ])
 
+const PROTOCOL_OPENER = /\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call)"/
+
+/**
+ * Removes AgentDesk protocol JSON objects from streamed model text, leaving the
+ * model's natural-language narration (e.g. "Vou explorar o ambiente…"). The model
+ * is told to answer in JSON only, but in practice it often prefixes prose before
+ * the tool-call JSON. Without this we'd render raw `{"type":"tool_calls",…}` in
+ * the chat bubble (and a truncated trailing object too).
+ */
+export function stripProtocolJson(text: string): string {
+  if (!text) return ''
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '{') {
+      // Walk a balanced JSON object, respecting strings/escapes.
+      let depth = 0
+      let inString = false
+      let escape = false
+      let j = i
+      for (; j < text.length; j++) {
+        const c = text[j]
+        if (inString) {
+          if (escape) escape = false
+          else if (c === '\\') escape = true
+          else if (c === '"') inString = false
+          continue
+        }
+        if (c === '"') inString = true
+        else if (c === '{') depth++
+        else if (c === '}') {
+          depth--
+          if (depth === 0) break
+        }
+      }
+      const block = text.slice(i, j < text.length ? j + 1 : j)
+      const unterminated = depth > 0 // ran off the end (truncated object)
+      if (PROTOCOL_OPENER.test(block)) {
+        // Drop protocol JSON (complete or truncated) from the narration.
+        i = j < text.length ? j + 1 : text.length
+        continue
+      }
+      if (unterminated) {
+        // Non-protocol unterminated brace — keep as-is and stop scanning.
+        out += text.slice(i)
+        break
+      }
+      out += block
+      i = j + 1
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out.trim()
+}
+
 function toolName(ev: ExecutionEvent): string {
   return (ev.content?.tool as string | undefined) ?? 'tool'
+}
+
+function eventCallId(ev: ExecutionEvent): string | undefined {
+  return (ev.content?.id as string | undefined) ?? (ev.content?.call_id as string | undefined)
 }
 
 /**
@@ -54,10 +127,18 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
   let thinking = ''
   let error: string | undefined
   const toolCalls: ToolCallView[] = []
+  const approvals = new Map<string, ApprovalView>()
 
-  const openCallFor = (name: string): ToolCallView | undefined => {
+  const openCallFor = (ev: ExecutionEvent): ToolCallView | undefined => {
+    const id = eventCallId(ev)
+    const name = toolName(ev)
     for (let i = toolCalls.length - 1; i >= 0; i--) {
-      if (toolCalls[i].tool === name && toolCalls[i].status !== 'success' && toolCalls[i].status !== 'failed' && toolCalls[i].status !== 'denied') {
+      if (
+        (id ? toolCalls[i].id === id : toolCalls[i].tool === name) &&
+        toolCalls[i].status !== 'success' &&
+        toolCalls[i].status !== 'failed' &&
+        toolCalls[i].status !== 'denied'
+      ) {
         return toolCalls[i]
       }
     }
@@ -88,6 +169,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     if (TOOL_REQUEST_TYPES.has(type)) {
       toolCalls.push({
         key: `${ev.id || idx}`,
+        id: eventCallId(ev),
         tool: toolName(ev),
         args: (c.arguments as Record<string, unknown>) ?? undefined,
         status: 'requested',
@@ -95,22 +177,22 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
       return
     }
     if (type === 'tool_call_validated') {
-      const call = openCallFor(toolName(ev))
+      const call = openCallFor(ev)
       if (call) call.status = 'validated'
       return
     }
     if (type === 'tool_executed' || type === 'plugin_tool_completed' || type === 'mcp_tool_completed') {
-      const call = openCallFor(toolName(ev))
+      const call = openCallFor(ev)
       if (call) call.status = 'success'
       return
     }
     if (type === 'tool_result') {
-      const call = openCallFor(toolName(ev)) ?? toolCalls[toolCalls.length - 1]
+      const call = openCallFor(ev) ?? toolCalls[toolCalls.length - 1]
       if (call) call.resultPreview = (c.result_preview as string) ?? call.resultPreview
       return
     }
     if (type === 'tool_failed' || type === 'plugin_tool_failed' || type === 'mcp_tool_failed') {
-      const call = openCallFor(toolName(ev))
+      const call = openCallFor(ev)
       if (call) {
         call.status = 'failed'
         call.error = (c.error as string) ?? call.error
@@ -118,19 +200,42 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
       return
     }
     if (type === 'tool_call_denied') {
-      const call = openCallFor(toolName(ev))
+      const call = openCallFor(ev)
       if (call) {
         call.status = 'denied'
         call.error = (c.error as string) ?? call.error
       }
       return
     }
+    if (type === 'approval_requested' || type === 'execution_waiting_approval') {
+      const approvalId = (c.approval_id as string | undefined) ?? ''
+      if (!approvalId) return
+      const current = approvals.get(approvalId)
+      approvals.set(approvalId, {
+        approvalId,
+        tool: (c.tool as string | undefined) ?? current?.tool ?? 'tool',
+        args: (c.arguments as Record<string, unknown> | undefined) ?? current?.args,
+        riskLevel: (c.risk_level as string | undefined) ?? current?.riskLevel,
+        summary: (c.summary as string | undefined) ?? current?.summary,
+      })
+      return
+    }
+    if (type === 'approval_approved' || type === 'approval_rejected') {
+      const approvalId = (c.approval_id as string | undefined) ?? ''
+      if (approvalId) approvals.delete(approvalId)
+      return
+    }
   })
 
   return {
-    answer: finalAnswer || (toolCalls.length > 0 ? '' : streamed),
+    // Prefer the clean parsed answer (from agent_completed). While the turn is
+    // still streaming, show the model's narration with protocol JSON stripped so
+    // tool-using turns surface progress text live instead of staying blank until
+    // completion (and never render raw `{"type":...}` JSON).
+    answer: finalAnswer || stripProtocolJson(streamed),
     thinking,
     toolCalls,
+    pendingApproval: Array.from(approvals.values())[0],
     error,
   }
 }

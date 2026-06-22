@@ -4,6 +4,7 @@ import type {
   ConversationCreate,
   ConversationDetail,
   ConversationMessageRequest,
+  ConversationUpdate,
 } from '../types/domain'
 
 export const conversationsApi = {
@@ -12,6 +13,8 @@ export const conversationsApi = {
   get: (id: string) => api.get<ConversationDetail>(`/api/conversations/${id}`),
   create: (data: ConversationCreate) =>
     api.post<Conversation>('/api/conversations', data),
+  update: (id: string, data: ConversationUpdate) =>
+    api.patch<Conversation>(`/api/conversations/${id}`, data),
   sendMessage: (id: string, data: ConversationMessageRequest) =>
     api.post<{ execution_id: string; conversation_id: string; status: string }>(
       `/api/conversations/${id}/messages`,

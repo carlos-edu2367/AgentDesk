@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { AssistantTurn } from '../components/chat/AssistantTurn'
 import { ChatThread } from '../components/chat/ChatThread'
@@ -42,6 +42,30 @@ describe('AssistantTurn', () => {
     expect(screen.getByText('read_file')).toBeInTheDocument()
   })
 
+  it('renders inline approval controls when a tool is waiting for approval', () => {
+    const onResolveApproval = vi.fn()
+    render(
+      <AssistantTurn
+        events={[
+          ev('approval_requested', {
+            approval_id: 'approval_1',
+            tool: 'http.request',
+            arguments: { url: 'https://example.com' },
+            risk_level: 'medium',
+            summary: 'Make an HTTP request',
+          }),
+          ev('execution_waiting_approval', { approval_id: 'approval_1' }),
+        ]}
+        onResolveApproval={onResolveApproval}
+      />,
+    )
+
+    expect(screen.getByText('Approval required')).toBeInTheDocument()
+    expect(screen.getByText('http.request')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Approve tool call' }))
+    expect(onResolveApproval).toHaveBeenCalledWith('approval_1', true)
+  })
+
   it('renders a collapsed team sub-thread for team turns', () => {
     render(
       <AssistantTurn
@@ -69,6 +93,28 @@ describe('ChatThread', () => {
     )
     expect(screen.getByText('Hi there')).toBeInTheDocument()
     expect(screen.getByText('Hello!')).toBeInTheDocument()
+  })
+
+  it('passes inline approval resolution with the turn execution id', () => {
+    const onResolveApproval = vi.fn()
+    render(
+      <ChatThread
+        turns={[
+          {
+            id: 'exec_1',
+            userInput: 'Research',
+            events: [
+              ev('approval_requested', { approval_id: 'approval_1', tool: 'http.request' }),
+              ev('execution_waiting_approval', { approval_id: 'approval_1' }),
+            ],
+          },
+        ]}
+        onResolveApproval={onResolveApproval}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve tool call' }))
+    expect(onResolveApproval).toHaveBeenCalledWith('exec_1', 'approval_1', true)
   })
 
   it('shows an empty prompt when there are no turns', () => {

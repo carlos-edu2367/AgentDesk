@@ -407,8 +407,14 @@ export interface Conversation {
   type: 'agent' | 'team'
   target_id: string
   title: string
+  workspace_ids: string[]
   created_at: string
   updated_at: string
+}
+
+export interface ConversationUpdate {
+  title?: string
+  workspace_ids?: string[]
 }
 
 export interface ConversationTurn {
