@@ -6,12 +6,11 @@ import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
 import { agentsApi } from '../api/agents'
 import { conversationsApi } from '../api/conversations'
-import { executionsApi } from '../api/executions'
 import { skillsApi } from '../api/skills'
 import { teamsApi } from '../api/teams'
 import { mcpApi } from '../api/mcp'
-import { workspacesApi } from '../api/workspaces'
-import type { Agent, ApprovalMode, MCPServer, Skill, Team, TeamCreate, Workspace } from '../types/domain'
+import { usePrimaryTarget } from '../hooks/usePrimaryTarget'
+import type { Agent, MCPServer, Skill, Team, TeamCreate } from '../types/domain'
 
 const DEFAULT_TOOLS_POLICY = {
   inherit_from_agents: true,
@@ -21,38 +20,29 @@ const DEFAULT_TOOLS_POLICY = {
 
 export function Teams() {
   const navigate = useNavigate()
+  const { isPrimary, setPrimary } = usePrimaryTarget()
   const [teams, setTeams] = useState<Team[]>([])
   const [agents, setAgents] = useState<Agent[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [selectedTeamId, setSelectedTeamId] = useState('')
-  const [message, setMessage] = useState('')
-  const [approvalMode, setApprovalMode] = useState<ApprovalMode>('manual')
-  const [selectedWorkspaces, setSelectedWorkspaces] = useState<string[]>([])
-  const [stream, setStream] = useState(true)
-  const [submittingExecution, setSubmittingExecution] = useState(false)
 
   const load = async () => {
     setLoading(true)
     setError(null)
     try {
-      const [teamList, agentList, workspaceList, skillList, mcpList] = await Promise.all([
+      const [teamList, agentList, skillList, mcpList] = await Promise.all([
         teamsApi.list(),
         agentsApi.list(),
-        workspacesApi.list(),
         skillsApi.list().catch(() => []),
         mcpApi.list().catch(() => []),
       ])
       setTeams(teamList)
       setAgents(agentList)
-      setWorkspaces(workspaceList)
       setSkills(skillList)
       setMcpServers(mcpList)
-      setSelectedTeamId(prev => prev || teamList[0]?.id || '')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -95,33 +85,6 @@ export function Teams() {
     if (!confirm(`Delete team "${team.name}"?`)) return
     await teamsApi.delete(team.id)
     setTeams(prev => prev.filter(t => t.id !== team.id))
-    if (selectedTeamId === team.id) setSelectedTeamId('')
-  }
-
-  const toggleWorkspace = (id: string) => {
-    setSelectedWorkspaces(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id],
-    )
-  }
-
-  const handleRunTeam = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedTeamId || !message.trim()) return
-    setSubmittingExecution(true)
-    setError(null)
-    try {
-      const result = await executionsApi.runTeam({
-        team_id: selectedTeamId,
-        message: message.trim(),
-        approval_mode: approvalMode,
-        workspace_ids: selectedWorkspaces,
-        stream,
-      })
-      navigate(`/executions/${result.execution_id}`)
-    } catch (e) {
-      setError(String(e))
-      setSubmittingExecution(false)
-    }
   }
 
   if (loading) return <LoadingState message="Loading teams..." />
@@ -145,128 +108,49 @@ export function Teams() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
-        <section>
-          {teams.length === 0 ? (
-            <EmptyState
-              title="No teams yet"
-              description="Create a team with a leader and at least one member to run multiagent work."
-              action={<button className="btn-primary" onClick={() => setShowForm(true)}>Create Team</button>}
-            />
-          ) : (
-            <div className="space-y-2">
-              {teams.map(team => (
-                <div key={team.id} className="card flex items-start justify-between gap-4 hover:bg-slate-800 transition-colors">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-slate-100">{team.name}</p>
-                    {team.description && (
-                      <p className="text-sm text-slate-400 mt-0.5 truncate">{team.description}</p>
-                    )}
-                    <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-500">
-                      <span>Leader: {agentNameById.get(team.leader_agent_id) ?? team.leader_agent_id}</span>
-                      <span>Members: {team.member_agent_ids.length}</span>
-                      <span>Strategy: {team.execution_strategy}</span>
-                      {(team.skills ?? []).length > 0 && <span>Skills: {(team.skills ?? []).length}</span>}
-                      {team.memory_config.use_team_memory && <span>Team memory on</span>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button className="btn-primary text-xs" onClick={() => handleChatTeam(team)}>
-                      Chat
-                    </button>
-                    <button className="btn-secondary text-xs" onClick={() => setSelectedTeamId(team.id)}>
-                      Select
-                    </button>
-                    <button className="btn-danger text-xs" onClick={() => handleDelete(team)}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <aside className="card h-fit">
-          <p className="text-sm font-semibold text-slate-200 mb-3">Run Team</p>
-          <form onSubmit={handleRunTeam} className="space-y-4">
-            <div>
-              <label className="form-label" htmlFor="team-select">Team</label>
-              <select
-                id="team-select"
-                className="form-select"
-                value={selectedTeamId}
-                onChange={e => setSelectedTeamId(e.target.value)}
-                required
-              >
-                <option value="">Select a team...</option>
-                {teams.map(team => (
-                  <option key={team.id} value={team.id}>{team.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="form-label" htmlFor="team-message">Team message</label>
-              <textarea
-                id="team-message"
-                className="form-textarea min-h-[110px]"
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <label className="form-label">Approval mode</label>
-              <div className="flex gap-3">
-                {(['manual', 'auto'] as ApprovalMode[]).map(mode => (
-                  <label key={mode} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="team_approval_mode"
-                      checked={approvalMode === mode}
-                      onChange={() => setApprovalMode(mode)}
-                    />
-                    <span className="text-sm text-slate-300 capitalize">{mode}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {workspaces.length > 0 && (
-              <div>
-                <label className="form-label">Workspaces</label>
-                <div className="space-y-2">
-                  {workspaces.map(workspace => (
-                    <label key={workspace.id} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedWorkspaces.includes(workspace.id)}
-                        onChange={() => toggleWorkspace(workspace.id)}
-                      />
-                      <span className="text-sm text-slate-300">{workspace.name}</span>
-                    </label>
-                  ))}
+      {teams.length === 0 ? (
+        <EmptyState
+          title="No teams yet"
+          description="Create a team with a leader and at least one member to run multiagent work."
+          action={<button className="btn-primary" onClick={() => setShowForm(true)}>Create Team</button>}
+        />
+      ) : (
+        <div className="space-y-2">
+          {teams.map(team => (
+            <div key={team.id} className="card flex items-start justify-between gap-4 hover:bg-slate-800 transition-colors">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-slate-100">{team.name}</p>
+                {team.description && (
+                  <p className="text-sm text-slate-400 mt-0.5 truncate">{team.description}</p>
+                )}
+                <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-500">
+                  <span>Leader: {agentNameById.get(team.leader_agent_id) ?? team.leader_agent_id}</span>
+                  <span>Members: {team.member_agent_ids.length}</span>
+                  <span>Strategy: {team.execution_strategy}</span>
+                  {(team.skills ?? []).length > 0 && <span>Skills: {(team.skills ?? []).length}</span>}
+                  {team.memory_config.use_team_memory && <span>Team memory on</span>}
                 </div>
               </div>
-            )}
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={stream} onChange={e => setStream(e.target.checked)} />
-              <span className="text-sm text-slate-300">Stream timeline</span>
-            </label>
-
-            <button
-              type="submit"
-              className="btn-primary w-full"
-              disabled={submittingExecution || !selectedTeamId || !message.trim()}
-            >
-              {submittingExecution ? 'Starting...' : 'Run Team'}
-            </button>
-          </form>
-        </aside>
-      </div>
+              <div className="flex gap-2 shrink-0 items-center">
+                <button
+                  className={`text-xs px-2 ${isPrimary('team', team.id) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
+                  title={isPrimary('team', team.id) ? 'Primary team' : 'Set as primary'}
+                  aria-label={isPrimary('team', team.id) ? 'Primary team' : 'Set as primary'}
+                  onClick={() => setPrimary({ type: 'team', id: team.id })}
+                >
+                  {isPrimary('team', team.id) ? '★' : '☆'}
+                </button>
+                <button className="btn-primary text-xs" onClick={() => handleChatTeam(team)}>
+                  Chat
+                </button>
+                <button className="btn-danger text-xs" onClick={() => handleDelete(team)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

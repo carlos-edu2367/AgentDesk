@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, renderHook } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { Teams } from '../views/Teams'
 import { teamsApi } from '../api/teams'
-import { executionsApi } from '../api/executions'
 import { conversationsApi } from '../api/conversations'
+import { usePrimaryTarget } from '../hooks/usePrimaryTarget'
 
 const navigate = vi.fn()
 
@@ -136,23 +136,15 @@ describe('Teams page', () => {
     })
   })
 
-  it('executes a team and navigates to execution detail', async () => {
+  it('pins a team as primary', async () => {
+    localStorage.clear()
     render(<MemoryRouter><Teams /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Research Team').length).toBeGreaterThan(0))
 
-    await userEvent.type(screen.getByLabelText('Team message'), 'Write a report')
-    await userEvent.click(screen.getByRole('button', { name: 'Run Team' }))
+    await userEvent.click(screen.getAllByRole('button', { name: /set as primary/i })[0])
 
-    await waitFor(() => {
-      expect(executionsApi.runTeam).toHaveBeenCalledWith({
-        team_id: 'team_001',
-        message: 'Write a report',
-        approval_mode: 'manual',
-        workspace_ids: [],
-        stream: true,
-      })
-      expect(navigate).toHaveBeenCalledWith('/executions/exec_team_001')
-    })
+    const { result } = renderHook(() => usePrimaryTarget())
+    expect(result.current.primary).toEqual({ type: 'team', id: 'team_001' })
   })
 
   it('continues the latest existing team chat', async () => {
