@@ -6,9 +6,11 @@ CAPABILITIES: Dict[str, List[str]] = {
         "filesystem.read",
         "filesystem.stat",
         "filesystem.search",
+        "filesystem.grep",
     ],
     "filesystem_write": [
         "filesystem.write",
+        "filesystem.edit",
         "filesystem.move",
         "filesystem.copy",
     ],
@@ -60,6 +62,7 @@ NATIVE_TOOLS = frozenset({
 
 CRITICAL_TOOLS = frozenset({
     "filesystem.write",
+    "filesystem.edit",
     "filesystem.delete",
     "filesystem.move",
     "filesystem.copy",
@@ -69,6 +72,7 @@ CRITICAL_TOOLS = frozenset({
 
 TOOL_RISK_LEVELS: Dict[str, str] = {
     "filesystem.write": "medium",
+    "filesystem.edit": "medium",
     "filesystem.delete": "high",
     "filesystem.move": "medium",
     "filesystem.copy": "low",
@@ -87,6 +91,7 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
 
 TOOL_SUMMARIES: Dict[str, str] = {
     "filesystem.write": "Write content to a file",
+    "filesystem.edit": "Replace an exact string in a file",
     "filesystem.delete": "Delete a file or directory",
     "filesystem.move": "Move a file or directory",
     "filesystem.copy": "Copy a file or directory",

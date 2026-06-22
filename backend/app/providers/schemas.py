@@ -25,8 +25,8 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     temperature: float = 0.4
     top_p: float = 0.9
-    context_window: int = 8192
-    max_tokens: int = 2048
+    context_window: int = 32768
+    max_tokens: int = 16384
     stream: bool = False
     tools: List[Dict[str, Any]] = Field(default_factory=list)
 

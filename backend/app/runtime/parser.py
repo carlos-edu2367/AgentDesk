@@ -194,6 +194,43 @@ class OutputParser:
                 tool_calls=[self._normalize_subagent_call(data, 0)],
             )
 
+        # Lenient fallbacks: smaller/local models routinely drift from the exact
+        # protocol when emitting a tool call. Accept the common deviations so the
+        # call actually executes instead of being dropped and leaking raw JSON
+        # into the chat. The runtime still validates the tool name afterwards, so
+        # a genuine mistake surfaces as a visible tool error, not silence.
+        args = data.get("arguments")
+        if not isinstance(args, dict):
+            args = data.get("args") if isinstance(data.get("args"), dict) else None
+        if args is not None:
+            # Shape: {"tool"/"name": "<tool>", "arguments": {...}} (type missing
+            # or unrecognized).
+            tool_field = data.get("tool") or data.get("name")
+            if isinstance(tool_field, str) and tool_field:
+                return ParserResult(
+                    is_final=False,
+                    is_tool_call=True,
+                    tool_calls=[{
+                        "id": str(data.get("id") or "call_1"),
+                        "tool": tool_field,
+                        "arguments": args,
+                    }],
+                )
+            # Shape: {"type": "<tool.name>", "arguments": {...}} — the tool name
+            # was collapsed into `type`. A dotted name is our tool-naming
+            # convention (filesystem.write, memory.create, …), so it's a strong,
+            # low-false-positive signal.
+            if isinstance(msg_type, str) and "." in msg_type:
+                return ParserResult(
+                    is_final=False,
+                    is_tool_call=True,
+                    tool_calls=[{
+                        "id": str(data.get("id") or "call_1"),
+                        "tool": msg_type,
+                        "arguments": args,
+                    }],
+                )
+
         return None
 
     def _normalize_tool_call(self, data: Dict[str, Any], index: int) -> Dict[str, Any]:

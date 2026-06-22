@@ -36,6 +36,37 @@ def test_parser_extracts_tool_call_embedded_in_text_before_other_json_objects():
     assert parsed.arguments == {"method": "GET", "url": "https://example.com/a"}
 
 
+def test_parser_accepts_tool_name_collapsed_into_type():
+    """Local models often emit {"type": "<tool>", "arguments": {...}} instead of
+    the documented {"type": "tool_call", "tool": "<tool>", ...}. Accept it so the
+    call actually runs instead of leaking raw JSON into the chat."""
+    parsed = OutputParser().parse(
+        '{"type": "filesystem.write", "arguments": {"path": "a.js", "content": "x", "mode": "overwrite"}}'
+    )
+    assert parsed.is_tool_call
+    assert parsed.tool_name == "filesystem.write"
+    assert parsed.arguments == {"path": "a.js", "content": "x", "mode": "overwrite"}
+
+
+def test_parser_accepts_tool_call_without_type_field():
+    """Shape {"tool": "<tool>", "arguments": {...}} with no type at all."""
+    parsed = OutputParser().parse(
+        '{"tool": "filesystem.read", "arguments": {"path": "a.js"}}'
+    )
+    assert parsed.is_tool_call
+    assert parsed.tool_name == "filesystem.read"
+    assert parsed.arguments == {"path": "a.js"}
+
+
+def test_parser_does_not_misclassify_plain_json_as_tool_call():
+    """A non-dotted unknown type without a tool field is not a tool call."""
+    parsed = OutputParser().parse('{"type": "status", "arguments": {}}')
+    assert not parsed.is_tool_call
+    # final_answer still wins.
+    final = OutputParser().parse('{"type": "final_answer", "content": "done"}')
+    assert final.is_final and not final.is_tool_call
+
+
 def test_parser_detects_truncated_tool_call():
     parser = OutputParser()
     # A tool call whose huge inline content was cut off mid-string.
@@ -77,6 +108,64 @@ def test_parser_accepts_tool_calls_batch():
     ]
     assert parsed.tool_name == "http.request"
     assert parsed.arguments == {"url": "https://example.com/a"}
+
+
+@pytest.mark.asyncio
+async def test_runtime_surfaces_truncation_and_gives_up_instead_of_looping():
+    """When the model keeps emitting tool calls cut off by max_tokens, the runtime
+    must (a) surface each truncation as a visible event and (b) stop after a few
+    consecutive truncations with an error — never loop silently to max_steps."""
+    agent = Agent(
+        id="agent_1",
+        name="Agent",
+        model_config=ModelConfig(provider_id="prov_1", model="mock"),
+        explicit_tools=["filesystem.write"],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    execution = Execution(
+        id="exec_1",
+        type=ExecutionType.AGENT,
+        target_id="agent_1",
+        user_input="write a big file",
+        status=ExecutionStatus.RUNNING,
+        approval_mode=ApprovalMode.AUTO,
+        workspace_ids=[],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    provider_config = Provider(id="prov_1", type=ProviderType.OLLAMA, name="Mock")
+    truncated = (
+        'Vou criar o arquivo.'
+        '{"type": "tool_calls", "calls": [{"id": "c1", "tool": "filesystem.write", '
+        '"arguments": {"path": "a.html", "content": "<!DOCTYPE html><html><body'
+    )
+    provider = MagicMock()
+    # More truncated responses than the retry budget — if the runtime looped to
+    # max_steps it would consume all of these; we assert it stops well before.
+    provider.chat = AsyncMock(side_effect=[
+        ChatResponse(provider_id="prov_1", model="mock", content=truncated)
+        for _ in range(8)
+    ])
+
+    with patch("app.runtime.agent_runtime.provider_registry") as provider_registry:
+        provider_registry.get.return_value = provider
+        events = [
+            event
+            async for event in AgentRuntime().run(agent, execution, provider_config, stream=False)
+        ]
+
+    truncation_events = [e for e in events if e.type.value == "model_output_truncated"]
+    error_events = [e for e in events if e.type.value == "error"]
+
+    # Each truncation is surfaced with an increasing attempt number...
+    assert [e.content["attempt"] for e in truncation_events] == [1, 2, 3]
+    # ...then the runtime gives up with a clear error instead of looping.
+    assert len(error_events) == 1
+    assert "max_tokens" in error_events[-1].content["error"]
+    # It must not have reached a successful completion or burned all 8 calls.
+    assert not any(e.type.value == "agent_completed" for e in events)
+    assert provider.chat.call_count == 4
 
 
 @pytest.mark.asyncio

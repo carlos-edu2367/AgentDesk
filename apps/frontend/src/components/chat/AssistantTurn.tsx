@@ -74,6 +74,15 @@ export function AssistantTurn({
         </div>
       )}
 
+      {view.notices.map((notice, i) => (
+        <p
+          key={i}
+          className="text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-md px-2 py-1.5 mt-2 flex items-start gap-2"
+        >
+          <span aria-hidden>⚠️</span>
+          <span>{notice}</span>
+        </p>
+      ))}
       {view.error && (
         <p className="text-sm text-red-300 whitespace-pre-wrap mt-2">{view.error}</p>
       )}

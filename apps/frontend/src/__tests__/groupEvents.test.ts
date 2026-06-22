@@ -135,6 +135,17 @@ describe('groupTurnEvents', () => {
     ])
     expect(view.error).toBe('boom')
   })
+
+  it('surfaces model output truncation as a retry notice', () => {
+    const view = groupTurnEvents([
+      ev({ type: 'model_chunk', content: { delta: 'Vou criar o arquivo.' } }),
+      ev({ type: 'model_output_truncated', content: { attempt: 1, max_retries: 3 } }),
+      ev({ type: 'model_output_truncated', content: { attempt: 2, max_retries: 3 } }),
+    ])
+    expect(view.notices).toHaveLength(2)
+    expect(view.notices[0]).toContain('1/3')
+    expect(view.notices[1]).toContain('2/3')
+  })
 })
 
 describe('stripProtocolJson', () => {
@@ -158,6 +169,18 @@ describe('stripProtocolJson', () => {
     expect(
       stripProtocolJson('{"type":"final_answer","content":"use {x} here"}after'),
     ).toBe('after')
+  })
+
+  it('drops a tool call whose name was collapsed into type', () => {
+    expect(
+      stripProtocolJson('Corrigindo agora.{"type":"filesystem.write","arguments":{"path":"a.js","content":"x"}}'),
+    ).toBe('Corrigindo agora.')
+  })
+
+  it('drops a tool call with no type field', () => {
+    expect(
+      stripProtocolJson('{"tool":"filesystem.read","arguments":{"path":"a.js"}}done'),
+    ).toBe('done')
   })
 })
 

@@ -40,6 +40,8 @@ export interface TurnView {
   toolCalls: ToolCallView[]
   /** Pending approval requested by the backend, if this turn is paused. */
   pendingApproval?: ApprovalView
+  /** Non-fatal notices to surface inline (e.g. an output-truncation retry). */
+  notices: string[]
   /** Error message if the turn failed. */
   error?: string
 }
@@ -50,7 +52,11 @@ const TOOL_REQUEST_TYPES = new Set([
   'mcp_tool_call_requested',
 ])
 
-const PROTOCOL_OPENER = /\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call)"/
+// Matches the canonical protocol openers plus the deviations smaller models
+// emit: the tool name collapsed into `type` ({"type":"filesystem.write",…}) or a
+// bare {"tool":"filesystem.write",…} with no type. Dotted names are our
+// tool-naming convention, mirroring the backend parser's leniency.
+const PROTOCOL_OPENER = /\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call|[a-z_]+\.[a-z_.]+)"|\{\s*"tool"\s*:\s*"[a-z_]+\.[a-z_.]+"/
 
 /**
  * Removes AgentDesk protocol JSON objects from streamed model text, leaving the
@@ -127,6 +133,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
   let thinking = ''
   let error: string | undefined
   const toolCalls: ToolCallView[] = []
+  const notices: string[] = []
   const approvals = new Map<string, ApprovalView>()
 
   const openCallFor = (ev: ExecutionEvent): ToolCallView | undefined => {
@@ -163,6 +170,15 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     }
     if (type === 'execution_failed' || type === 'error' || type === 'team_failed') {
       error = (c.error as string) ?? error
+      return
+    }
+    if (type === 'model_output_truncated') {
+      const attempt = (c.attempt as number | undefined) ?? notices.length + 1
+      const max = (c.max_retries as number | undefined) ?? 0
+      notices.push(
+        `A resposta passou do limite de tokens (max_tokens) antes de fechar a chamada — ` +
+        `tentando de novo (${attempt}/${max}), pedindo para dividir em partes menores.`,
+      )
       return
     }
 
@@ -235,6 +251,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     answer: finalAnswer || stripProtocolJson(streamed),
     thinking,
     toolCalls,
+    notices,
     pendingApproval: Array.from(approvals.values())[0],
     error,
   }

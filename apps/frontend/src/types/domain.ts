@@ -20,6 +20,7 @@ export type EventType =
   | 'model_request_started'
   | 'model_chunk'
   | 'model_reasoning_chunk'
+  | 'model_output_truncated'
   | 'model_completed'
   | 'agent_completed'
   | 'execution_completed'

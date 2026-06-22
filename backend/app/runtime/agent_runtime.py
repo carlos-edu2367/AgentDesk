@@ -22,6 +22,10 @@ from .prompt_builder import PromptBuilder
 from .parser import OutputParser
 
 MAX_STEPS = 10
+# How many consecutive truncated tool calls we tolerate before giving up. The
+# model is fed a recovery hint (split the file) after each one; if it keeps
+# blowing past max_tokens we stop with a clear error instead of looping silently.
+MAX_TRUNCATION_RETRIES = 3
 TOOL_RESULT_PREVIEW_BYTES = 4_000
 TOOL_MODEL_RESULT_MAX_BYTES = 12_000
 TOOL_MODEL_BODY_MAX_CHARS = 8_000
@@ -504,6 +508,7 @@ class AgentRuntime:
                 )
 
             max_steps = int(runtime_options.get("max_steps") or MAX_STEPS)
+            truncation_retries = 0
             for step in range(initial_step, max_steps):
                 yield self._make_event(
                     execution_id, EventType.MODEL_REQUEST_STARTED, "runtime", provider_config.id,
@@ -554,10 +559,37 @@ class AgentRuntime:
                         # llm_config.max_tokens is too small for the payload (e.g.
                         # writing a whole file inline). Feed back a recovery hint
                         # and let it retry instead of silently dropping the call.
+                        truncation_retries += 1
                         self._save_audit_log(
                             execution_id, agent_id, "tool_call_truncated",
                             "Tool call truncated (likely exceeded max_tokens)",
-                            {"step": step, "raw_output_preview": final_text[-500:]},
+                            {"step": step, "attempt": truncation_retries, "raw_output_preview": final_text[-500:]},
+                        )
+                        if truncation_retries > MAX_TRUNCATION_RETRIES:
+                            # The model can't fit the tool call within its output
+                            # budget even after being told to split it. Stop with a
+                            # clear, actionable error instead of looping to max_steps.
+                            yield self._make_event(
+                                execution_id, EventType.ERROR, "runtime", agent_id,
+                                {"error": (
+                                    f"The model kept exceeding its output token limit (max_tokens="
+                                    f"{agent.llm_config.max_tokens}) while building a tool call, even "
+                                    f"after being asked to split the work into smaller pieces. Increase "
+                                    f"the agent's max_tokens, or ask it to write the file in smaller chunks."
+                                )}
+                            )
+                            return
+                        # Surface the truncation to the UI/logs so a retrying turn
+                        # isn't an invisible "Working…" — previously this was only
+                        # an audit log and the chat showed nothing.
+                        yield self._make_event(
+                            execution_id, EventType.MODEL_OUTPUT_TRUNCATED, "runtime", agent_id,
+                            {
+                                "step": step,
+                                "attempt": truncation_retries,
+                                "max_retries": MAX_TRUNCATION_RETRIES,
+                                "reason": "Model output hit the token limit (max_tokens) before the tool-call JSON closed.",
+                            }
                         )
                         messages.append({"role": "assistant", "content": final_text.strip()})
                         messages.append({"role": "user", "content": json.dumps({
@@ -580,6 +612,9 @@ class AgentRuntime:
                     )
                     return
 
+                # A well-formed tool call landed — clear the consecutive-truncation
+                # tally so earlier blips don't count against a now-healthy turn.
+                truncation_retries = 0
                 messages.append({"role": "assistant", "content": final_text.strip()})
                 tool_results = []
                 for call in parsed.tool_calls:

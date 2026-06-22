@@ -44,8 +44,8 @@ class ModelConfig(BaseModel):
     model: str
     temperature: float = 0.4
     top_p: float = 0.9
-    context_window: int = 8192
-    max_tokens: int = 2048
+    context_window: int = 32768
+    max_tokens: int = 16384
     stream: bool = True
 
 class MemoryConfig(BaseModel):

@@ -26,6 +26,7 @@ class EventType(str, Enum):
     MODEL_REQUEST_STARTED = "model_request_started"
     MODEL_CHUNK = "model_chunk"
     MODEL_REASONING_CHUNK = "model_reasoning_chunk"
+    MODEL_OUTPUT_TRUNCATED = "model_output_truncated"
     MODEL_COMPLETED = "model_completed"
     AGENT_COMPLETED = "agent_completed"
     EXECUTION_COMPLETED = "execution_completed"
