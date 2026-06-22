@@ -9,7 +9,7 @@ from app.db.repositories.registry import (
     execution_repo,
     execution_event_repo,
 )
-from app.domain.utils import generate_id, sanitize_for_output
+from app.domain.utils import CHAT_DISPLAY_MAX_CHARS, generate_id, sanitize_for_output
 from app.domain.enums import ExecutionType, ExecutionStatus
 from app.orchestrator.execution_engine import execution_engine
 from app.orchestrator.team_engine import team_execution_engine
@@ -70,7 +70,7 @@ def get_conversation(id: str, db: Session = Depends(get_db)):
             schemas.ExecutionEvent(
                 **{
                     **schemas.ExecutionEvent.model_validate(e).model_dump(),
-                    "content": sanitize_for_output(e.content or {}),
+                    "content": sanitize_for_output(e.content or {}, max_chars=CHAT_DISPLAY_MAX_CHARS),
                 }
             )
             for e in events

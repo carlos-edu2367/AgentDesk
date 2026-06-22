@@ -4,7 +4,7 @@ from typing import List, Optional, Any
 from app.db.database import get_db
 from app.domain import schemas
 from app.db.repositories.registry import execution_repo
-from app.domain.utils import generate_id, sanitize_for_output
+from app.domain.utils import CHAT_DISPLAY_MAX_CHARS, generate_id, sanitize_for_output
 
 router = APIRouter(prefix="/executions", tags=["executions"])
 
@@ -341,7 +341,7 @@ def _build_execution_detail(db: Session, execution_id: str) -> schemas.Execution
         schemas.ExecutionEvent(
             **{
                 **schemas.ExecutionEvent.model_validate(event).model_dump(),
-                "content": sanitize_for_output(event.content or {}),
+                "content": sanitize_for_output(event.content or {}, max_chars=CHAT_DISPLAY_MAX_CHARS),
             }
         )
         for event in events

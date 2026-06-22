@@ -49,6 +49,12 @@ def mask_secrets(value: Any) -> Any:
     return value
 
 
+# Audit/export previews keep payloads small (4000). Chat/history endpoints serve
+# the agent's full answer to the user, so they use a much higher cap that still
+# guards against pathological blobs.
+CHAT_DISPLAY_MAX_CHARS = 200_000
+
+
 def truncate_large_fields(value: Any, max_chars: int = 4000) -> Any:
     if isinstance(value, dict):
         return {key: truncate_large_fields(item, max_chars=max_chars) for key, item in value.items()}
