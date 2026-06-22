@@ -68,8 +68,12 @@ Approval Mode: {self.execution.approval_mode}
             return ""
 
         lines = ["[AVAILABLE TOOLS]"]
-        lines.append("You have access to the following tools. To call a tool, respond with ONLY this JSON format:")
+        lines.append("You have access to the following tools. To call one tool, respond with ONLY this JSON format:")
         lines.append('{"type": "tool_call", "tool": "<tool_name>", "arguments": {<args>}}')
+        lines.append("")
+        lines.append("To call multiple independent tools in the same step, respond with ONLY this JSON format:")
+        lines.append('{"type": "tool_calls", "calls": [{"id": "call_1", "tool": "<tool_name>", "arguments": {<args>}}, {"id": "call_2", "tool": "<tool_name>", "arguments": {<args>}}]}')
+        lines.append("AgentDesk will return all results together as tool_results. After reading them, you may call more tools if context is still incomplete.")
         lines.append("")
         lines.append("When you have your final answer, respond with ONLY:")
         lines.append('{"type": "final_answer", "content": "<your answer>"}')

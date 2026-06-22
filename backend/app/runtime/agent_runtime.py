@@ -124,6 +124,210 @@ class AgentRuntime:
             content=content,
         )
 
+    async def _execute_tool_call(
+        self,
+        *,
+        call: Dict[str, Any],
+        execution_id: str,
+        agent_id: str,
+        agent: Agent,
+        execution: Execution,
+        approval_mode: ApprovalMode,
+        runtime_options: Dict[str, Any],
+        messages: List[Dict],
+        step: int,
+    ) -> tuple[List[ExecutionEventCreate], Dict[str, Any], bool]:
+        events: List[ExecutionEventCreate] = []
+        call_id = str(call.get("id") or f"call_{step + 1}")
+        tool_name = str(call.get("tool") or "unknown_tool")
+        tool_args = call.get("arguments") if isinstance(call.get("arguments"), dict) else {}
+
+        events.append(self._make_event(
+            execution_id, EventType.TOOL_CALL_REQUESTED, "runtime", agent_id,
+            {"id": call_id, "tool": tool_name, "arguments": tool_args, "step": step}
+        ))
+
+        try:
+            check_tool_permission(
+                tool_name, agent.capabilities, agent.explicit_tools, agent.blocked_tools,
+            )
+        except (ToolNotFoundError, ToolDeniedError) as exc:
+            events.append(self._make_event(
+                execution_id, EventType.TOOL_CALL_DENIED, "runtime", agent_id,
+                {"id": call_id, "tool": tool_name, "error": exc.message, "code": exc.code}
+            ))
+            self._save_audit_log(
+                execution_id, agent_id, "tool_call_denied",
+                f"Tool '{tool_name}' denied: {exc.message}",
+                {"id": call_id, "tool": tool_name, "arguments": tool_args, "code": exc.code},
+            )
+            return events, {
+                "id": call_id,
+                "tool": tool_name,
+                "status": "error",
+                "error": exc.message,
+                "error_code": exc.code,
+            }, False
+
+        events.append(self._make_event(
+            execution_id, EventType.TOOL_CALL_VALIDATED, "runtime", agent_id,
+            {"id": call_id, "tool": tool_name}
+        ))
+
+        context = ToolExecutionContext(
+            execution_id=execution_id,
+            agent_id=agent_id,
+            workspace_ids=execution.workspace_ids or [],
+            db=self.db,
+            approval_mode=str(approval_mode),
+            extra=runtime_options,
+        )
+        tool = tool_registry.get(tool_name)
+        is_plugin_tool = getattr(tool, "source", "") == "plugin"
+        is_mcp_tool = getattr(tool, "source", "") == "mcp"
+        is_critical = tool_name in CRITICAL_TOOLS or bool(getattr(tool, "critical", False))
+
+        if is_critical:
+            if approval_mode == ApprovalMode.MANUAL:
+                approval_id = self._save_approval_request(
+                    execution_id, agent_id, tool_name, tool_args,
+                    messages, step + 1
+                )
+                self._save_audit_log(
+                    execution_id, agent_id, "approval_requested",
+                    f"Approval requested for {tool_name}",
+                    {
+                        "id": call_id,
+                        "tool": tool_name,
+                        "arguments": tool_args,
+                        "approval_id": approval_id,
+                        "risk_level": get_risk_level(tool_name),
+                    },
+                    risk_level=get_risk_level(tool_name),
+                )
+                events.append(self._make_event(
+                    execution_id, EventType.APPROVAL_REQUESTED, "runtime", agent_id,
+                    {
+                        "id": call_id,
+                        "approval_id": approval_id,
+                        "tool": tool_name,
+                        "arguments": tool_args,
+                        "risk_level": get_risk_level(tool_name),
+                        "summary": get_tool_summary(tool_name),
+                    }
+                ))
+                events.append(self._make_event(
+                    execution_id, EventType.EXECUTION_WAITING_APPROVAL, "orchestrator", "engine",
+                    {"approval_id": approval_id}
+                ))
+                return events, {
+                    "id": call_id,
+                    "tool": tool_name,
+                    "status": "waiting_approval",
+                    "approval_id": approval_id,
+                }, True
+
+            self._save_audit_log(
+                execution_id, agent_id, "approval_auto_granted",
+                f"Auto-approved {tool_name}",
+                {
+                    "id": call_id,
+                    "tool": tool_name,
+                    "arguments": tool_args,
+                    "risk_level": get_risk_level(tool_name),
+                },
+                risk_level=get_risk_level(tool_name),
+            )
+            events.append(self._make_event(
+                execution_id, EventType.APPROVAL_AUTO_GRANTED, "orchestrator", "engine",
+                {
+                    "id": call_id,
+                    "tool": tool_name,
+                    "risk_level": get_risk_level(tool_name),
+                }
+            ))
+
+        try:
+            if is_plugin_tool:
+                events.append(self._make_event(
+                    execution_id, EventType.PLUGIN_TOOL_CALL_REQUESTED, "runtime", agent_id,
+                    {"id": call_id, "tool": tool_name, "arguments": tool_args, "plugin_id": getattr(tool, "plugin_id", "")}
+                ))
+            if is_mcp_tool:
+                events.append(self._make_event(
+                    execution_id, EventType.MCP_TOOL_CALL_REQUESTED, "runtime", agent_id,
+                    {"id": call_id, "tool": tool_name, "arguments": tool_args, "server_id": getattr(tool, "server_id", "")}
+                ))
+            result = await tool.execute(tool_args, context)
+
+            result_preview = json.dumps(result, ensure_ascii=False)[:TOOL_RESULT_PREVIEW_BYTES]
+            if is_plugin_tool:
+                events.append(self._make_event(
+                    execution_id, EventType.PLUGIN_TOOL_COMPLETED, "tool", tool_name,
+                    {"id": call_id, "tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "result_preview": result_preview}
+                ))
+            if is_mcp_tool:
+                events.append(self._make_event(
+                    execution_id, EventType.MCP_TOOL_COMPLETED, "tool", tool_name,
+                    {"id": call_id, "tool": tool_name, "server_id": getattr(tool, "server_id", ""), "result_preview": result_preview}
+                ))
+
+            events.append(self._make_event(
+                execution_id, EventType.TOOL_EXECUTED, "tool", tool_name,
+                {"id": call_id, "tool": tool_name, "arguments": tool_args, "status": "success"}
+            ))
+            events.append(self._make_event(
+                execution_id, EventType.TOOL_RESULT, "tool", tool_name,
+                {"id": call_id, "tool": tool_name, "result_preview": result_preview}
+            ))
+
+            self._save_audit_log(
+                execution_id, agent_id, "tool_executed",
+                f"Executou {tool_name}",
+                {"id": call_id, "tool": tool_name, "arguments": tool_args, "result_preview": result_preview},
+                risk_level=get_risk_level(tool_name) if is_critical else "low",
+            )
+            return events, {
+                "id": call_id,
+                "tool": tool_name,
+                "status": "success",
+                "result": _compact_tool_result_for_model(result),
+            }, False
+
+        except ToolError as exc:
+            if is_plugin_tool and exc.code == "PLUGIN_DISABLED":
+                events.append(self._make_event(
+                    execution_id, EventType.PLUGIN_DISABLED_TOOL_BLOCKED, "tool", tool_name,
+                    {"id": call_id, "tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message}
+                ))
+            elif is_plugin_tool:
+                events.append(self._make_event(
+                    execution_id, EventType.PLUGIN_TOOL_FAILED, "tool", tool_name,
+                    {"id": call_id, "tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message, "code": exc.code}
+                ))
+            if getattr(tool, "source", "") == "mcp":
+                events.append(self._make_event(
+                    execution_id, EventType.MCP_TOOL_FAILED, "tool", tool_name,
+                    {"id": call_id, "tool": tool_name, "server_id": getattr(tool, "server_id", ""), "error": exc.message, "code": exc.code}
+                ))
+            events.append(self._make_event(
+                execution_id, EventType.TOOL_FAILED, "tool", tool_name,
+                {"id": call_id, "tool": tool_name, "error": exc.message, "code": exc.code}
+            ))
+            self._save_audit_log(
+                execution_id, agent_id, "tool_failed",
+                f"Tool '{tool_name}' falhou: {exc.message}",
+                {"id": call_id, "tool": tool_name, "arguments": tool_args, "error": exc.message, "code": exc.code},
+                risk_level=get_risk_level(tool_name) if is_critical else "low",
+            )
+            return events, {
+                "id": call_id,
+                "tool": tool_name,
+                "status": "error",
+                "error": exc.message,
+                "error_code": exc.code,
+            }, False
+
     async def run(
         self,
         agent: Agent,
@@ -308,195 +512,79 @@ class AgentRuntime:
                 parsed = self.parser.parse(final_text)
 
                 if not parsed.is_tool_call:
+                    if self.parser.looks_like_truncated_tool_call(final_text):
+                        # The model began a tool call but the output was cut off
+                        # before the JSON closed — almost always because
+                        # llm_config.max_tokens is too small for the payload (e.g.
+                        # writing a whole file inline). Feed back a recovery hint
+                        # and let it retry instead of silently dropping the call.
+                        self._save_audit_log(
+                            execution_id, agent_id, "tool_call_truncated",
+                            "Tool call truncated (likely exceeded max_tokens)",
+                            {"step": step, "raw_output_preview": final_text[-500:]},
+                        )
+                        messages.append({"role": "assistant", "content": final_text.strip()})
+                        messages.append({"role": "user", "content": json.dumps({
+                            "type": "tool_call_truncated",
+                            "error": (
+                                "Your previous response was cut off before the tool-call "
+                                "JSON was complete (output token limit reached). Do NOT "
+                                "resend the same large payload. If writing a large file, "
+                                "split it: call filesystem.write with mode 'create_only' "
+                                "for the first part, then filesystem.write with mode "
+                                "'append' for each remaining part, keeping every call "
+                                "small enough to finish within the output limit. Respond "
+                                "with ONLY valid JSON."
+                            ),
+                        })})
+                        continue
                     yield self._make_event(
                         execution_id, EventType.AGENT_COMPLETED, "runtime", agent_id,
                         {"result": parsed.content}
                     )
                     return
 
-                tool_name = parsed.tool_name
-                tool_args = parsed.arguments
-
-                yield self._make_event(
-                    execution_id, EventType.TOOL_CALL_REQUESTED, "runtime", agent_id,
-                    {"tool": tool_name, "arguments": tool_args, "step": step}
-                )
-
                 messages.append({"role": "assistant", "content": final_text.strip()})
+                tool_results = []
+                for call in parsed.tool_calls:
+                    events, result_payload, waiting_approval = await self._execute_tool_call(
+                        call=call,
+                        execution_id=execution_id,
+                        agent_id=agent_id,
+                        agent=agent,
+                        execution=execution,
+                        approval_mode=approval_mode,
+                        runtime_options=runtime_options,
+                        messages=messages,
+                        step=step,
+                    )
+                    for event in events:
+                        yield event
+                    if waiting_approval:
+                        return
+                    tool_results.append(result_payload)
 
-                try:
-                    check_tool_permission(
-                        tool_name, agent.capabilities, agent.explicit_tools, agent.blocked_tools,
-                    )
-                except (ToolNotFoundError, ToolDeniedError) as exc:
-                    yield self._make_event(
-                        execution_id, EventType.TOOL_CALL_DENIED, "runtime", agent_id,
-                        {"tool": tool_name, "error": exc.message, "code": exc.code}
-                    )
-                    self._save_audit_log(
-                        execution_id, agent_id, "tool_call_denied",
-                        f"Tool '{tool_name}' denied: {exc.message}",
-                        {"tool": tool_name, "arguments": tool_args, "code": exc.code},
-                    )
+                if parsed.is_batch or len(tool_results) > 1:
                     messages.append({"role": "user", "content": json.dumps({
-                        "type": "tool_error",
-                        "tool": tool_name,
-                        "error": exc.message,
-                        "error_code": exc.code,
+                        "type": "tool_results",
+                        "results": tool_results,
                     })})
-                    continue
-
-                yield self._make_event(
-                    execution_id, EventType.TOOL_CALL_VALIDATED, "runtime", agent_id,
-                    {"tool": tool_name}
-                )
-
-                context = ToolExecutionContext(
-                    execution_id=execution_id,
-                    agent_id=agent_id,
-                    workspace_ids=execution.workspace_ids or [],
-                    db=self.db,
-                    approval_mode=str(approval_mode),
-                    extra=runtime_options,
-                )
-                tool = tool_registry.get(tool_name)
-                is_plugin_tool = getattr(tool, "source", "") == "plugin"
-                is_mcp_tool = getattr(tool, "source", "") == "mcp"
-                is_critical = tool_name in CRITICAL_TOOLS or bool(getattr(tool, "critical", False))
-
-                # --- Approval gate for critical tools ---
-                if is_critical:
-                    if approval_mode == ApprovalMode.MANUAL:
-                        approval_id = self._save_approval_request(
-                            execution_id, agent_id, tool_name, tool_args,
-                            messages, step + 1
-                        )
-                        self._save_audit_log(
-                            execution_id, agent_id, "approval_requested",
-                            f"Approval requested for {tool_name}",
-                            {
-                                "tool": tool_name, "arguments": tool_args,
-                                "approval_id": approval_id,
-                                "risk_level": get_risk_level(tool_name),
-                            },
-                            risk_level=get_risk_level(tool_name),
-                        )
-                        yield self._make_event(
-                            execution_id, EventType.APPROVAL_REQUESTED, "runtime", agent_id,
-                            {
-                                "approval_id": approval_id,
-                                "tool": tool_name,
-                                "arguments": tool_args,
-                                "risk_level": get_risk_level(tool_name),
-                                "summary": get_tool_summary(tool_name),
-                            }
-                        )
-                        yield self._make_event(
-                            execution_id, EventType.EXECUTION_WAITING_APPROVAL, "orchestrator", "engine",
-                            {"approval_id": approval_id}
-                        )
-                        return  # Stop; engine will resume after approval
-
+                elif tool_results:
+                    result = tool_results[0]
+                    if result.get("status") == "success":
+                        messages.append({"role": "user", "content": json.dumps({
+                            "type": "tool_result",
+                            "tool": result.get("tool"),
+                            "status": "success",
+                            "result": result.get("result"),
+                        })})
                     else:
-                        # Auto-approval
-                        self._save_audit_log(
-                            execution_id, agent_id, "approval_auto_granted",
-                            f"Auto-approved {tool_name}",
-                            {
-                                "tool": tool_name, "arguments": tool_args,
-                                "risk_level": get_risk_level(tool_name),
-                            },
-                            risk_level=get_risk_level(tool_name),
-                        )
-                        yield self._make_event(
-                            execution_id, EventType.APPROVAL_AUTO_GRANTED, "orchestrator", "engine",
-                            {
-                                "tool": tool_name,
-                                "risk_level": get_risk_level(tool_name),
-                            }
-                        )
-
-                # --- Execute tool ---
-                try:
-                    if is_plugin_tool:
-                        yield self._make_event(
-                            execution_id, EventType.PLUGIN_TOOL_CALL_REQUESTED, "runtime", agent_id,
-                            {"tool": tool_name, "arguments": tool_args, "plugin_id": getattr(tool, "plugin_id", "")}
-                        )
-                    if is_mcp_tool:
-                        yield self._make_event(
-                            execution_id, EventType.MCP_TOOL_CALL_REQUESTED, "runtime", agent_id,
-                            {"tool": tool_name, "arguments": tool_args, "server_id": getattr(tool, "server_id", "")}
-                        )
-                    result = await tool.execute(tool_args, context)
-
-                    result_preview = json.dumps(result, ensure_ascii=False)[:TOOL_RESULT_PREVIEW_BYTES]
-                    if is_plugin_tool:
-                        yield self._make_event(
-                            execution_id, EventType.PLUGIN_TOOL_COMPLETED, "tool", tool_name,
-                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "result_preview": result_preview}
-                        )
-                    if is_mcp_tool:
-                        yield self._make_event(
-                            execution_id, EventType.MCP_TOOL_COMPLETED, "tool", tool_name,
-                            {"tool": tool_name, "server_id": getattr(tool, "server_id", ""), "result_preview": result_preview}
-                        )
-
-                    yield self._make_event(
-                        execution_id, EventType.TOOL_EXECUTED, "tool", tool_name,
-                        {"tool": tool_name, "arguments": tool_args, "status": "success"}
-                    )
-                    yield self._make_event(
-                        execution_id, EventType.TOOL_RESULT, "tool", tool_name,
-                        {"tool": tool_name, "result_preview": result_preview}
-                    )
-
-                    self._save_audit_log(
-                        execution_id, agent_id, "tool_executed",
-                        f"Executou {tool_name}",
-                        {"tool": tool_name, "arguments": tool_args, "result_preview": result_preview},
-                        risk_level=get_risk_level(tool_name) if is_critical else "low",
-                    )
-
-                    messages.append({"role": "user", "content": json.dumps({
-                        "type": "tool_result",
-                        "tool": tool_name,
-                        "status": "success",
-                        "result": _compact_tool_result_for_model(result),
-                    })})
-
-                except ToolError as exc:
-                    if is_plugin_tool and exc.code == "PLUGIN_DISABLED":
-                        yield self._make_event(
-                            execution_id, EventType.PLUGIN_DISABLED_TOOL_BLOCKED, "tool", tool_name,
-                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message}
-                        )
-                    elif is_plugin_tool:
-                        yield self._make_event(
-                            execution_id, EventType.PLUGIN_TOOL_FAILED, "tool", tool_name,
-                            {"tool": tool_name, "plugin_id": getattr(tool, "plugin_id", ""), "error": exc.message, "code": exc.code}
-                        )
-                    if getattr(tool, "source", "") == "mcp":
-                        yield self._make_event(
-                            execution_id, EventType.MCP_TOOL_FAILED, "tool", tool_name,
-                            {"tool": tool_name, "server_id": getattr(tool, "server_id", ""), "error": exc.message, "code": exc.code}
-                        )
-                    yield self._make_event(
-                        execution_id, EventType.TOOL_FAILED, "tool", tool_name,
-                        {"tool": tool_name, "error": exc.message, "code": exc.code}
-                    )
-                    self._save_audit_log(
-                        execution_id, agent_id, "tool_failed",
-                        f"Tool '{tool_name}' falhou: {exc.message}",
-                        {"tool": tool_name, "arguments": tool_args, "error": exc.message, "code": exc.code},
-                        risk_level=get_risk_level(tool_name) if is_critical else "low",
-                    )
-                    messages.append({"role": "user", "content": json.dumps({
-                        "type": "tool_error",
-                        "tool": tool_name,
-                        "error": exc.message,
-                        "error_code": exc.code,
-                    })})
+                        messages.append({"role": "user", "content": json.dumps({
+                            "type": "tool_error",
+                            "tool": result.get("tool"),
+                            "error": result.get("error"),
+                            "error_code": result.get("error_code"),
+                        })})
 
             yield self._make_event(
                 execution_id, EventType.AGENT_COMPLETED, "runtime", agent_id,

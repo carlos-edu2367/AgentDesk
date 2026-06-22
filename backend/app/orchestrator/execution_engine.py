@@ -1,6 +1,7 @@
 import asyncio
 import json
 from datetime import datetime
+from typing import Optional
 
 from app.db import database
 from app.db.repositories.registry import (
@@ -8,7 +9,7 @@ from app.db.repositories.registry import (
     provider_repo, approval_repo,
 )
 from app.domain.schemas import ExecutionEventCreate, Provider, Agent, ExecutionUpdate, AuditLogCreate, ApprovalRequestUpdate
-from app.domain.enums import EventType, ExecutionStatus, ApprovalStatus
+from app.domain.enums import EventType, ExecutionStatus, ApprovalStatus, ApprovalMode
 from app.domain.utils import generate_id
 from app.domain.utils import sanitize_for_output
 from app.runtime.agent_runtime import AgentRuntime, _compact_tool_result_for_model
@@ -108,7 +109,8 @@ class ExecutionEngine:
 
     async def resume_agent_execution(
         self, execution_id: str, approval_id: str,
-        approved: bool, rejection_reason: str = "", stream: bool = True
+        approved: bool, rejection_reason: str = "", stream: bool = True,
+        approval_mode_override: Optional[str] = None,
     ):
         """Called after a user approves or rejects a pending tool approval."""
         db = database.SessionLocal()
@@ -131,9 +133,16 @@ class ExecutionEngine:
                 raise ValueError(f"Provider {agent.llm_config.provider_id} not found.")
             provider_config = Provider.model_validate(provider_model)
 
+            update_fields: dict = {"status": ExecutionStatus.RUNNING}
+            if approval_mode_override and approval_mode_override != execution.approval_mode:
+                try:
+                    update_fields["approval_mode"] = ApprovalMode(approval_mode_override)
+                except ValueError:
+                    pass
+
             execution = execution_repo.update(
                 db, db_obj=execution,
-                obj_in=ExecutionUpdate(status=ExecutionStatus.RUNNING)
+                obj_in=ExecutionUpdate(**update_fields)
             )
 
             await self._emit_and_save_event(db, execution_id, ExecutionEventCreate(

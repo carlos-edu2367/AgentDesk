@@ -68,6 +68,7 @@ class ConversationModel(Base):
     type = Column(String)            # "agent" | "team"
     target_id = Column(String)       # agent id or team id
     title = Column(String, default="")
+    workspace_ids = Column(JSON, default=list)  # workspaces granted to this chat
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

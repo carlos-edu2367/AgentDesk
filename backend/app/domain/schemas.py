@@ -179,6 +179,7 @@ class ExecutionUpdate(BaseModel):
     completed_at: Optional[datetime] = None
     result: Optional[str] = None
     error: Optional[str] = None
+    approval_mode: Optional[ApprovalMode] = None
 
 class Execution(ExecutionBase):
     id: str
@@ -209,12 +210,21 @@ class ConversationBase(BaseModel):
     type: ExecutionType
     target_id: str
     title: str = ""
+    workspace_ids: List[str] = Field(default_factory=list)
+
+    @field_validator("workspace_ids", mode="before")
+    @classmethod
+    def _coerce_workspace_ids(cls, v):
+        # Rows created before the workspace_ids column existed read back as NULL;
+        # treat that as an empty grant instead of failing serialization.
+        return v or []
 
 class ConversationCreate(ConversationBase):
     pass
 
 class ConversationUpdate(BaseModel):
     title: Optional[str] = None
+    workspace_ids: Optional[List[str]] = None
 
 class Conversation(ConversationBase):
     id: str
@@ -546,6 +556,7 @@ class ApprovalRequest(ApprovalRequestCreate):
 class ApprovalResolutionRequest(BaseModel):
     approved: bool
     reason: Optional[str] = None
+    approval_mode: Optional[ApprovalMode] = None
 
 class MemoryBase(BaseModel):
     scope: MemoryScope

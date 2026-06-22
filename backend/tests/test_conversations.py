@@ -152,6 +152,43 @@ def test_post_message_creates_turn(setup_agent, test_db):
     assert refreshed.title == "Hello"
 
 
+def test_update_conversation_workspaces_and_message_inherits(setup_agent, test_db):
+    conv = client.post(
+        "/api/conversations", json={"type": "agent", "target_id": "agent_1"}
+    ).json()
+    assert conv["workspace_ids"] == []
+
+    # Grant workspaces to the conversation.
+    upd = client.patch(
+        f"/api/conversations/{conv['id']}", json={"workspace_ids": ["ws_a", "ws_b"]}
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["workspace_ids"] == ["ws_a", "ws_b"]
+
+    # A message with no explicit workspaces inherits the conversation's grant.
+    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": "Hi"})
+    assert r.status_code == 200, r.text
+    exec_id = r.json()["execution_id"]
+    execution = execution_repo.get(test_db, id=exec_id)
+    assert execution.workspace_ids == ["ws_a", "ws_b"]
+
+
+def test_message_workspaces_override_conversation(setup_agent, test_db):
+    conv = client.post(
+        "/api/conversations",
+        json={"type": "agent", "target_id": "agent_1", "workspace_ids": ["ws_default"]},
+    ).json()
+    assert conv["workspace_ids"] == ["ws_default"]
+
+    r = client.post(
+        f"/api/conversations/{conv['id']}/messages",
+        json={"message": "Hi", "workspace_ids": ["ws_override"]},
+    )
+    assert r.status_code == 200, r.text
+    execution = execution_repo.get(test_db, id=r.json()["execution_id"])
+    assert execution.workspace_ids == ["ws_override"]
+
+
 def test_build_conversation_history(setup_agent, test_db):
     from app.runtime.history import build_conversation_history
 

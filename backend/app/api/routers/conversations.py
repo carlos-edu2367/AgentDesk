@@ -37,6 +37,14 @@ def list_conversations(
     return q.order_by(conversation_repo.model.updated_at.desc()).limit(limit).all()
 
 
+@router.patch("/{id}", response_model=schemas.Conversation)
+def update_conversation(id: str, obj_in: schemas.ConversationUpdate, db: Session = Depends(get_db)):
+    conv = conversation_repo.get(db, id=id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation_repo.update(db, db_obj=conv, obj_in=obj_in)
+
+
 @router.get("/{id}", response_model=schemas.ConversationDetail)
 def get_conversation(id: str, db: Session = Depends(get_db)):
     conv = conversation_repo.get(db, id=id)
@@ -91,6 +99,11 @@ def post_message(
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
+    # Per-message workspace_ids override the conversation default; otherwise the
+    # chat inherits the workspaces granted to the conversation. Without this the
+    # chat never grants any workspace and write/terminal tools fail.
+    workspace_ids = req.workspace_ids or list(conv.workspace_ids or [])
+
     new_id = generate_id("execution")
     execution_in = schemas.ExecutionCreate(
         type=ExecutionType(conv.type),
@@ -98,7 +111,7 @@ def post_message(
         user_input=req.message,
         status=ExecutionStatus.PENDING,
         approval_mode=req.approval_mode,
-        workspace_ids=req.workspace_ids,
+        workspace_ids=workspace_ids,
         conversation_id=id,
     )
     execution_repo.create(db, obj_in=execution_in, id=new_id)

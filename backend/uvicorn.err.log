@@ -1,0 +1,5 @@
+INFO:     Started server process [19292]
+INFO:     Waiting for application startup.
+INFO:agentdesk.startup:AppData structure verified/created.
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.

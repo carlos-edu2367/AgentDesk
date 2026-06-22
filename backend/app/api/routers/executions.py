@@ -165,35 +165,62 @@ async def get_execution_events(id: str, db: Session = Depends(get_db)):
     if not execution:
         raise HTTPException(status_code=404, detail="Execution not found")
 
-    # Fetch existing events
-    db_events = db.query(execution_event_repo.model).filter(execution_event_repo.model.execution_id == id).order_by(execution_event_repo.model.created_at.asc()).all()
-    existing_events = [schemas.ExecutionEvent.model_validate(e).model_dump() for e in db_events]
+    # Subscribe BEFORE snapshotting existing events. Otherwise any event emitted
+    # in the window between the snapshot and the subscription is lost (this is the
+    # race that made resumed-after-approval turns only appear after a page reload):
+    # the event_bus has no buffer, so a publish with no live subscriber is dropped.
+    queue = event_bus.subscribe(id)
 
     async def event_generator():
-        # Yield existing
-        for ev in existing_events:
-            if isinstance(ev.get("created_at"), datetime):
-                ev["created_at"] = ev["created_at"].isoformat()
-            # We serialize to string, prepended by "data: "
-            yield f"data: {json.dumps(ev)}\n\n"
-        
-        # If already finished, just return
-        if execution.status in [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED]:
-            return
+        sent_ids: set[str] = set()
 
-        # Otherwise, subscribe to new events
-        queue = event_bus.subscribe(id)
+        def render(event: dict) -> str:
+            if isinstance(event.get("created_at"), datetime):
+                event["created_at"] = event["created_at"].isoformat()
+            return f"data: {json.dumps(event)}\n\n"
+
         try:
+            # Replay everything already persisted, tracking ids so we can dedup
+            # against live events that may also be sitting in the queue.
+            db_events = (
+                db.query(execution_event_repo.model)
+                .filter(execution_event_repo.model.execution_id == id)
+                .order_by(execution_event_repo.model.created_at.asc())
+                .all()
+            )
+            for e in db_events:
+                ev = schemas.ExecutionEvent.model_validate(e).model_dump()
+                if ev.get("id"):
+                    sent_ids.add(ev["id"])
+                yield render(ev)
+
+            # Re-read fresh status: the snapshot above may be stale if the engine
+            # advanced while we were replaying.
+            fresh = execution_repo.get(db, id=id)
+            finished = fresh and fresh.status in [
+                ExecutionStatus.COMPLETED, ExecutionStatus.FAILED, ExecutionStatus.CANCELLED,
+            ]
+
+            if finished:
+                # Drain any live events that arrived during replay (deduped), then stop.
+                while not queue.empty():
+                    event = queue.get_nowait()
+                    if isinstance(event, dict) and event.get("type") == "sse_close_connection":
+                        return
+                    if isinstance(event, dict) and event.get("id") in sent_ids:
+                        continue
+                    if isinstance(event, dict):
+                        yield render(event)
+                return
+
             while True:
                 event = await queue.get()
                 if isinstance(event, dict) and event.get("type") == "sse_close_connection":
                     break
-                
-                # yield SSE format
-                if isinstance(event, dict) and "created_at" in event and not isinstance(event["created_at"], str):
-                    event["created_at"] = event["created_at"].isoformat()
-                    
-                yield f"data: {json.dumps(event)}\n\n"
+                if isinstance(event, dict) and event.get("id") in sent_ids:
+                    continue
+                if isinstance(event, dict):
+                    yield render(event)
         finally:
             event_bus.unsubscribe(id, queue)
 
@@ -285,13 +312,13 @@ async def resolve_approval(
     if approval.status != ApprovalStatus.PENDING:
         raise HTTPException(status_code=409, detail=f"Approval is already {approval.status}")
 
-    # Determine stream preference from query or default
     background_tasks.add_task(
         execution_engine.resume_agent_execution,
         id, approval_id,
         req.approved,
         req.reason or "",
         True,
+        str(req.approval_mode.value) if req.approval_mode else None,
     )
 
     action = "approved" if req.approved else "rejected"
