@@ -1,7 +1,9 @@
-INFO:     Started server process [19292]
+INFO:     Will watch for changes in these directories: ['C:\\Users\\Carlos\\Documents\\Carlos Eduardo\\agentes\\AgentDesk\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [17468] using WatchFiles
+INFO:     Started server process [1228]
 INFO:     Waiting for application startup.
 INFO:agentdesk.startup:AppData structure verified/created.
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
 INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
-C:\Users\Carlos\AppData\Roaming\Python\Python313\site-packages\pydantic\_internal\_generate_schema.py:2264: UnsupportedFieldAttributeWarning: The 'alias' attribute with value 'model_config' was provided to the `Field()` function, which has no effect in the context it was used. 'alias' is field-specific metadata, and can only be attached to a model field using `Annotated` metadata or by assignment. This may have happened because an `Annotated` type alias using the `type` statement was used, or if the `Field()` function was attached to a single member of a union type.
-  warnings.warn(
+WARNING:  WatchFiles detected changes in 'app\domain\utils.py'. Reloading...

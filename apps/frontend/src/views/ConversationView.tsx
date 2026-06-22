@@ -8,7 +8,7 @@ import { conversationsApi } from '../api/conversations'
 import { workspacesApi } from '../api/workspaces'
 import { approvalsApi } from '../api/approvals'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
-import type { ApprovalMode, Conversation, ConversationDetail, Workspace } from '../types/domain'
+import type { ApprovalMode, ConversationDetail, Workspace } from '../types/domain'
 
 // Backend events that mark the end of a turn (agent or team).
 const TERMINAL_EVENT_TYPES = new Set([
@@ -35,8 +35,6 @@ export function ConversationView() {
   // input can be cleared; coerced to a number/null when persisted and sent.
   const [maxStepsInput, setMaxStepsInput] = useState('')
 
-  // Sibling chats (same agent/team) for the left rail + new-chat action.
-  const [siblings, setSiblings] = useState<Conversation[]>([])
   // Workspaces granted to this chat (so file/terminal tools can run).
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspaceIds, setWorkspaceIds] = useState<string[]>([])
@@ -63,13 +61,6 @@ export function ConversationView() {
     }
   }
 
-  const loadSiblings = async (conv: Conversation) => {
-    const list = await conversationsApi
-      .list({ type: conv.type, target_id: conv.target_id, limit: 100 })
-      .catch(() => [])
-    setSiblings(list)
-  }
-
   useEffect(() => {
     if (!id) return
     // Reset the in-flight turn when switching chats; otherwise the previous
@@ -84,7 +75,6 @@ export function ConversationView() {
         setDetail(d)
         setWorkspaceIds(d.conversation.workspace_ids ?? [])
         setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
-        loadSiblings(d.conversation)
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
@@ -109,7 +99,6 @@ export function ConversationView() {
       fetchDetail().then(() => {
         setActiveExecutionId(null)
         setPendingInput('')
-        if (detail) loadSiblings(detail.conversation)
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,25 +184,6 @@ export function ConversationView() {
     }
   }
 
-  const handleNewChat = async () => {
-    if (!detail) return
-    setError(null)
-    try {
-      const conv = await conversationsApi.create({
-        type: detail.conversation.type,
-        target_id: detail.conversation.target_id,
-        title: '',
-      })
-      // Carry the current workspace grant over to the fresh chat.
-      if (workspaceIds.length) {
-        await conversationsApi.update(conv.id, { workspace_ids: workspaceIds }).catch(() => {})
-      }
-      navigate(`/conversations/${conv.id}`)
-    } catch (err) {
-      setError(String(err))
-    }
-  }
-
   const toggleWorkspace = async (wsId: string) => {
     if (!id) return
     const next = workspaceIds.includes(wsId)
@@ -281,35 +251,6 @@ export function ConversationView() {
       )}
 
       <div className="flex flex-1 min-h-0 gap-3">
-        {/* Left rail: all chats for this agent/team + new chat */}
-        <aside className="hidden md:flex w-60 shrink-0 flex-col border border-slate-700 rounded-lg bg-slate-900/40 overflow-hidden">
-          <div className="p-2 border-b border-slate-700">
-            <button className="btn-primary w-full text-xs" onClick={handleNewChat}>
-              + New chat
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {siblings.length === 0 ? (
-              <p className="text-xs text-slate-500 px-1 py-2">No chats yet.</p>
-            ) : (
-              siblings.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => navigate(`/conversations/${c.id}`)}
-                  className={`block w-full text-left rounded-md px-2 py-1.5 text-xs truncate transition-colors ${
-                    c.id === id
-                      ? 'bg-slate-700 text-slate-100'
-                      : 'text-slate-300 hover:bg-slate-800'
-                  }`}
-                  title={c.title || 'Untitled chat'}
-                >
-                  {c.title || 'Untitled chat'}
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
-
         <div className="flex-1 min-w-0 flex flex-col">
           {/* Workspace grant control */}
           <div className="mb-2">

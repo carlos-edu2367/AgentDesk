@@ -91,6 +91,27 @@ describe('ConversationView', () => {
     await waitFor(() => expect(screen.getByText('Researcher')).toBeInTheDocument())
   })
 
+  it('does not render a conversation history rail inside the chat view', async () => {
+    list.mockResolvedValue([
+      {
+        id: 'conv_2',
+        type: 'agent',
+        target_id: 'agent_1',
+        title: 'Older chat',
+        workspace_ids: [],
+        created_at: '',
+        updated_at: '',
+      },
+    ])
+
+    renderAt('conv_1')
+
+    await waitFor(() => expect(screen.getByText('Researcher')).toBeInTheDocument())
+    expect(list).not.toHaveBeenCalled()
+    expect(screen.queryByText('Older chat')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ New chat' })).not.toBeInTheDocument()
+  })
+
   it('sends chat messages with manual approval by default', async () => {
     renderAt('conv_1')
     await waitFor(() => expect(screen.getByRole('textbox')).toBeInTheDocument())
