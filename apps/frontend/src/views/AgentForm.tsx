@@ -1,47 +1,48 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { TopBar } from '../components/TopBar'
 import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
+import { MultiSelectSection, type SelectableItem } from '../components/MultiSelectSection'
 import { agentsApi } from '../api/agents'
 import { providersApi } from '../api/providers'
 import { toolsApi } from '../api/tools'
 import { skillsApi } from '../api/skills'
 import { pluginsApi } from '../api/plugins'
 import { mcpApi } from '../api/mcp'
-import type { ModelConfig, Provider, ModelInfo, AgentToolsConfig, Skill, Plugin, MCPServer } from '../types/domain'
+import type {
+  ModelConfig, Provider, ModelInfo, AgentToolsConfig, Skill, Plugin, MCPServer, CapabilityInfo,
+} from '../types/domain'
 
 const DEFAULT_MODEL_CONFIG: ModelConfig = {
   provider_id: '',
   model: '',
   temperature: 0.4,
   top_p: 0.9,
-  context_window: 8192,
-  max_tokens: 2048,
+  context_window: 32768,
+  max_tokens: 16384,
   stream: true,
 }
 
-const ALL_CAPABILITIES = [
-  'filesystem_read',
-  'filesystem_write',
-  'filesystem_delete',
-  'terminal',
-  'http',
-  'workspace',
-  'logs',
-] as const
+// Fallback when the backend capability list can't be fetched. Kept in sync with
+// backend app/tools/capabilities.py.
+const FALLBACK_CAPABILITIES = [
+  'filesystem_read', 'filesystem_write', 'filesystem_delete',
+  'terminal', 'http', 'web', 'workspace', 'logs',
+]
 
 const CAPABILITY_LABELS: Record<string, string> = {
-  filesystem_read: 'Filesystem Read',
-  filesystem_write: 'Filesystem Write (write, move, copy)',
-  filesystem_delete: 'Filesystem Delete',
-  terminal: 'Terminal (exec commands)',
-  http: 'HTTP Requests',
-  workspace: 'Workspace Info',
-  logs: 'Execution Logs',
+  filesystem_read: 'Read files, list, stat, grep, search',
+  filesystem_write: 'Write, edit, multi-edit, move, copy',
+  filesystem_delete: 'Delete files and directories',
+  terminal: 'Run shell commands (exec, background poll)',
+  http: 'Make HTTP requests',
+  web: 'Search the web',
+  workspace: 'Read workspace info',
+  logs: 'Read execution logs',
 }
 
-const CRITICAL_CAPABILITIES = new Set(['filesystem_write', 'filesystem_delete', 'terminal', 'http'])
+const CRITICAL_CAPABILITIES = new Set(['filesystem_write', 'filesystem_delete', 'terminal', 'http', 'web'])
 
 const DEFAULT_TOOLS_CONFIG: AgentToolsConfig = {
   capabilities: [],
@@ -58,11 +59,13 @@ export function AgentForm() {
   const [skills, setSkills] = useState<Skill[]>([])
   const [plugins, setPlugins] = useState<Plugin[]>([])
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
+  const [capabilityInfos, setCapabilityInfos] = useState<CapabilityInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -80,6 +83,7 @@ export function AgentForm() {
     skillsApi.list().then(setSkills).catch(() => setSkills([]))
     pluginsApi.list().then(setPlugins).catch(() => setPlugins([]))
     mcpApi.list().then(setMcpServers).catch(() => setMcpServers([]))
+    toolsApi.listCapabilities().then(setCapabilityInfos).catch(() => setCapabilityInfos([]))
   }, [])
 
   useEffect(() => {
@@ -103,6 +107,7 @@ export function AgentForm() {
         setSelectedMcpServerIds(agentMcpServers.map(server => server.id))
         setExplicitToolsInput(tc.explicit_tools.join(', '))
         setBlockedToolsInput(tc.blocked_tools.join(', '))
+        if (tc.explicit_tools.length || tc.blocked_tools.length) setShowAdvanced(true)
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
@@ -117,6 +122,73 @@ export function AgentForm() {
       .finally(() => setLoadingModels(false))
   }, [modelConfig.provider_id])
 
+  // Capability options: backend list (authoritative) merged with plugin/MCP-derived ones.
+  const capabilityOptions = useMemo(() => {
+    const fromBackend = capabilityInfos.map(c => c.name)
+    return Array.from(new Set([
+      ...(fromBackend.length ? fromBackend : FALLBACK_CAPABILITIES),
+      ...plugins.flatMap(plugin => plugin.permissions ?? []),
+      ...(mcpServers.length > 0 ? ['mcp'] : []),
+      ...mcpServers.map(server => `mcp.${server.id}`),
+    ]))
+  }, [capabilityInfos, plugins, mcpServers])
+
+  const capabilityToolsMap = useMemo(() => {
+    const map: Record<string, string[]> = {}
+    for (const c of capabilityInfos) map[c.name] = c.tools
+    return map
+  }, [capabilityInfos])
+
+  const capabilityItems: SelectableItem[] = useMemo(() =>
+    capabilityOptions.map(cap => ({
+      id: cap,
+      name: cap,
+      critical: CRITICAL_CAPABILITIES.has(cap),
+      meta: CAPABILITY_LABELS[cap]
+        ?? (capabilityToolsMap[cap]?.join(', '))
+        ?? cap,
+      search: (capabilityToolsMap[cap] ?? []).join(' '),
+    })),
+  [capabilityOptions, capabilityToolsMap])
+
+  const skillItems: SelectableItem[] = useMemo(() =>
+    skills.map(s => ({ id: s.id, name: s.name, mono: s.id, meta: s.description, search: (s.tags ?? []).join(' ') })),
+  [skills])
+
+  const pluginItems: SelectableItem[] = useMemo(() =>
+    plugins.map(p => ({
+      id: p.id, name: p.name, mono: p.id,
+      status: { text: p.enabled ? 'enabled' : 'disabled', ok: p.enabled },
+      meta: (p.tools_json ?? []).map(t => t.name).join(', ') || 'No tools',
+    })),
+  [plugins])
+
+  const mcpItems: SelectableItem[] = useMemo(() =>
+    mcpServers.map(s => ({
+      id: s.id, name: s.name, mono: s.id,
+      status: { text: s.enabled ? 'enabled' : 'disabled', ok: s.enabled },
+      meta: (s.tools_cache_json ?? []).map(t => t.name).join(', ') || 'No tools detected',
+    })),
+  [mcpServers])
+
+  const grantEverything = () => {
+    setToolsConfig(prev => ({ ...prev, capabilities: capabilityOptions }))
+    setSelectedSkillIds(skills.map(s => s.id))
+    setSelectedPluginIds(plugins.map(p => p.id))
+    setSelectedMcpServerIds(mcpServers.map(s => s.id))
+  }
+
+  const revokeEverything = () => {
+    setToolsConfig(prev => ({ ...prev, capabilities: [] }))
+    setSelectedSkillIds([])
+    setSelectedPluginIds([])
+    setSelectedMcpServerIds([])
+  }
+
+  const totalGranted =
+    toolsConfig.capabilities.length + selectedSkillIds.length +
+    selectedPluginIds.length + selectedMcpServerIds.length
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
@@ -129,19 +201,12 @@ export function AgentForm() {
         explicit_tools: splitInput(explicitToolsInput),
         blocked_tools: splitInput(blockedToolsInput),
       }
-      if (isEdit && id) {
-        await agentsApi.update(id, payload)
-        await toolsApi.updateAgentTools(id, tc).catch(() => {})
-        await agentsApi.updateSkills(id, selectedSkillIds).catch(() => {})
-        await agentsApi.updatePlugins(id, selectedPluginIds).catch(() => {})
-        await agentsApi.updateMcpServers(id, selectedMcpServerIds).catch(() => {})
-      } else {
-        const created = await agentsApi.create(payload)
-        await toolsApi.updateAgentTools(created.id, tc).catch(() => {})
-        await agentsApi.updateSkills(created.id, selectedSkillIds).catch(() => {})
-        await agentsApi.updatePlugins(created.id, selectedPluginIds).catch(() => {})
-        await agentsApi.updateMcpServers(created.id, selectedMcpServerIds).catch(() => {})
-      }
+      const targetId = isEdit && id ? id : (await agentsApi.create(payload)).id
+      if (isEdit && id) await agentsApi.update(id, payload)
+      await toolsApi.updateAgentTools(targetId, tc).catch(() => {})
+      await agentsApi.updateSkills(targetId, selectedSkillIds).catch(() => {})
+      await agentsApi.updatePlugins(targetId, selectedPluginIds).catch(() => {})
+      await agentsApi.updateMcpServers(targetId, selectedMcpServerIds).catch(() => {})
       navigate('/agents')
     } catch (e) {
       setError(String(e))
@@ -150,96 +215,70 @@ export function AgentForm() {
     }
   }
 
-  const toggleSkill = (skillId: string) => {
-    setSelectedSkillIds(prev =>
-      prev.includes(skillId) ? prev.filter(id => id !== skillId) : [...prev, skillId],
-    )
-  }
-
-  const togglePlugin = (pluginId: string) => {
-    setSelectedPluginIds(prev =>
-      prev.includes(pluginId) ? prev.filter(id => id !== pluginId) : [...prev, pluginId],
-    )
-  }
-
-  const toggleMcpServer = (serverId: string) => {
-    setSelectedMcpServerIds(prev =>
-      prev.includes(serverId) ? prev.filter(id => id !== serverId) : [...prev, serverId],
-    )
-  }
-
-  const toggleCapability = (cap: string) => {
-    setToolsConfig(prev => ({
-      ...prev,
-      capabilities: prev.capabilities.includes(cap)
-        ? prev.capabilities.filter(c => c !== cap)
-        : [...prev.capabilities, cap],
-    }))
-  }
-
-  const capabilityOptions = Array.from(new Set([
-    ...ALL_CAPABILITIES,
-    ...plugins.flatMap(plugin => plugin.permissions ?? []),
-    ...(mcpServers.length > 0 ? ['mcp'] : []),
-    ...mcpServers.map(server => `mcp.${server.id}`),
-  ]))
-
   if (loading) return <LoadingState />
   if (error && loading) return <ErrorState message={error} />
 
   return (
-    <div>
+    <div className="pb-24">
       <TopBar
         title={isEdit ? 'Edit Agent' : 'New Agent'}
+        description="Configure the agent's identity, model, and what it's allowed to do."
         actions={
-          <button className="btn-ghost" onClick={() => navigate('/agents')}>
-            Cancel
-          </button>
+          <button className="btn-ghost" onClick={() => navigate('/agents')}>Cancel</button>
         }
       />
 
-      <form onSubmit={handleSubmit} className="space-y-5 max-w-2xl">
+      <form id="agent-form" onSubmit={handleSubmit} className="mx-auto max-w-3xl space-y-6">
         {error && (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-md p-3">
+          <div className="rounded-md border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
             {error}
           </div>
         )}
 
-        <div>
-          <label className="form-label">Name *</label>
-          <input
-            className="form-input"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="e.g. Research Assistant"
-            required
-          />
-        </div>
+        {/* Identity */}
+        <section className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <span aria-hidden>🪪</span>
+            <h3 className="text-sm font-semibold text-slate-100">Identity</h3>
+          </div>
+          <div>
+            <label className="form-label">Name *</label>
+            <input
+              className="form-input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="e.g. Research Assistant"
+              required
+            />
+          </div>
+          <div>
+            <label className="form-label">Description</label>
+            <input
+              className="form-input"
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="Brief description of what this agent does"
+            />
+          </div>
+          <div>
+            <label className="form-label">System Prompt</label>
+            <textarea
+              className="form-textarea min-h-[120px]"
+              value={systemPrompt}
+              onChange={e => setSystemPrompt(e.target.value)}
+              placeholder="You are a helpful assistant..."
+            />
+          </div>
+        </section>
 
-        <div>
-          <label className="form-label">Description</label>
-          <input
-            className="form-input"
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="Brief description of what this agent does"
-          />
-        </div>
+        {/* Model */}
+        <section className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <span aria-hidden>⚙️</span>
+            <h3 className="text-sm font-semibold text-slate-100">Model</h3>
+          </div>
 
-        <div>
-          <label className="form-label">System Prompt</label>
-          <textarea
-            className="form-textarea min-h-[120px]"
-            value={systemPrompt}
-            onChange={e => setSystemPrompt(e.target.value)}
-            placeholder="You are a helpful assistant..."
-          />
-        </div>
-
-        <fieldset className="border border-slate-700 rounded-lg p-4">
-          <legend className="text-sm font-medium text-slate-300 px-1">Model Configuration</legend>
-          <div className="space-y-4 mt-2">
-
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="form-label" htmlFor="agent-provider">Provider *</label>
               <select
@@ -259,7 +298,7 @@ export function AgentForm() {
             <div>
               <label className="form-label" htmlFor="agent-model">Model *</label>
               {loadingModels ? (
-                <p className="text-slate-500 text-sm">Loading models...</p>
+                <p className="text-slate-500 text-sm py-2">Loading models...</p>
               ) : models.length > 0 ? (
                 <select
                   id="agent-model"
@@ -284,249 +323,179 @@ export function AgentForm() {
                 />
               )}
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">Temperature</label>
-                <input
-                  type="number" min="0" max="2" step="0.1"
-                  className="form-input"
-                  value={modelConfig.temperature}
-                  onChange={e => setModelConfig(prev => ({ ...prev, temperature: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <label className="form-label">Top P</label>
-                <input
-                  type="number" min="0" max="1" step="0.05"
-                  className="form-input"
-                  value={modelConfig.top_p}
-                  onChange={e => setModelConfig(prev => ({ ...prev, top_p: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <label className="form-label">Context Window</label>
-                <input
-                  type="number" min="512" step="512"
-                  className="form-input"
-                  value={modelConfig.context_window}
-                  onChange={e => setModelConfig(prev => ({ ...prev, context_window: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <label className="form-label">Max Tokens</label>
-                <input
-                  type="number" min="64" step="64"
-                  className="form-input"
-                  value={modelConfig.max_tokens}
-                  onChange={e => setModelConfig(prev => ({ ...prev, max_tokens: Number(e.target.value) }))}
-                />
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={modelConfig.stream}
-                onChange={e => setModelConfig(prev => ({ ...prev, stream: e.target.checked }))}
-                className="rounded border-slate-600 bg-slate-800 text-blue-500"
-              />
-              <span className="text-sm text-slate-300">Enable streaming</span>
-            </label>
           </div>
-        </fieldset>
 
-        <fieldset className="border border-slate-700 rounded-lg p-4">
-          <legend className="text-sm font-medium text-slate-300 px-1">Skills</legend>
-          <div className="space-y-3 mt-2">
-            <p className="text-xs text-slate-500">
-              Skills alteram o comportamento do agente, mas não executam código.
-            </p>
-            {skills.length === 0 ? (
-              <p className="text-sm text-slate-500">No skills available.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                {skills.map(skill => (
-                  <label key={skill.id} className="flex items-start gap-2 cursor-pointer rounded border border-slate-800 p-2">
-                    <input
-                      aria-label={skill.name}
-                      type="checkbox"
-                      checked={selectedSkillIds.includes(skill.id)}
-                      onChange={() => toggleSkill(skill.id)}
-                      className="mt-0.5 rounded border-slate-600 bg-slate-800 text-blue-500"
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm text-slate-200">{skill.name}</span>
-                      <span className="block font-mono text-xs text-slate-500">{skill.id}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-            {selectedSkillIds.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {selectedSkillIds.map(skillId => {
-                  const skill = skills.find(item => item.id === skillId)
-                  return (
-                    <span key={skillId} className="rounded bg-blue-500/20 px-2 py-0.5 text-xs text-blue-300">
-                      {skill?.name ?? skillId}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </fieldset>
-
-        <fieldset className="border border-slate-700 rounded-lg p-4">
-          <legend className="text-sm font-medium text-slate-300 px-1">Plugins</legend>
-          <div className="space-y-3 mt-2">
-            <p className="text-xs text-slate-500">
-              Plugins adicionam tools e skills locais. Tools ainda respeitam capabilities, explicit tools e blocked tools.
-            </p>
-            {plugins.length === 0 ? (
-              <p className="text-sm text-slate-500">No plugins installed.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                {plugins.map(plugin => (
-                  <label key={plugin.id} className="flex items-start gap-2 cursor-pointer rounded border border-slate-800 p-2">
-                    <input
-                      aria-label={plugin.name}
-                      type="checkbox"
-                      checked={selectedPluginIds.includes(plugin.id)}
-                      onChange={() => togglePlugin(plugin.id)}
-                      className="mt-0.5 rounded border-slate-600 bg-slate-800 text-blue-500"
-                    />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2 text-sm text-slate-200">
-                        {plugin.name}
-                        <span className={`rounded px-1.5 py-0.5 text-xs ${plugin.enabled ? 'bg-green-500/15 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                          {plugin.enabled ? 'enabled' : 'disabled'}
-                        </span>
-                      </span>
-                      <span className="block font-mono text-xs text-slate-500">{plugin.id}</span>
-                      <span className="block text-xs text-slate-500">
-                        {(plugin.tools_json ?? []).map(tool => tool.name).join(', ') || 'No tools'}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </fieldset>
-
-        <fieldset className="border border-slate-700 rounded-lg p-4">
-          <legend className="text-sm font-medium text-slate-300 px-1">MCP Servers</legend>
-          <div className="space-y-3 mt-2">
-            <p className="text-xs text-slate-500">
-              MCP servers adicionam tools via processos locais stdio. O servidor precisa estar associado ao agente e a tool ainda precisa de capability ou explicit tool.
-            </p>
-            {mcpServers.length === 0 ? (
-              <p className="text-sm text-slate-500">No MCP servers configured.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2">
-                {mcpServers.map(server => (
-                  <label key={server.id} className="flex items-start gap-2 cursor-pointer rounded border border-slate-800 p-2">
-                    <input
-                      aria-label={server.name}
-                      type="checkbox"
-                      checked={selectedMcpServerIds.includes(server.id)}
-                      onChange={() => toggleMcpServer(server.id)}
-                      className="mt-0.5 rounded border-slate-600 bg-slate-800 text-blue-500"
-                    />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2 text-sm text-slate-200">
-                        {server.name}
-                        <span className={`rounded px-1.5 py-0.5 text-xs ${server.enabled ? 'bg-green-500/15 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                          {server.enabled ? 'enabled' : 'disabled'}
-                        </span>
-                      </span>
-                      <span className="block font-mono text-xs text-slate-500">{server.id}</span>
-                      <span className="block text-xs text-slate-500">
-                        {(server.tools_cache_json ?? []).map(tool => tool.name).join(', ') || 'No tools detected'}
-                      </span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </fieldset>
-
-        <fieldset className="border border-slate-700 rounded-lg p-4">
-          <legend className="text-sm font-medium text-slate-300 px-1">Tool Permissions</legend>
-          <div className="space-y-4 mt-2">
-
-            <div>
-              <p className="form-label mb-2">Capabilities</p>
-              <div className="space-y-2">
-                {capabilityOptions.map(cap => {
-                  const isCritical = CRITICAL_CAPABILITIES.has(cap)
-                  const isChecked = toolsConfig.capabilities.includes(cap)
-                  return (
-                    <label key={cap} className="flex items-start gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => toggleCapability(cap)}
-                        className="mt-0.5 rounded border-slate-600 bg-slate-800 text-blue-500"
-                      />
-                      <span className="text-sm">
-                        <span className={`font-mono ${isCritical ? 'text-amber-300' : 'text-slate-300'}`}>
-                          {cap}
-                        </span>
-                        {isCritical && (
-                          <span className="ml-2 text-xs text-amber-500/80 bg-amber-500/10 border border-amber-500/20 rounded px-1 py-0.5">
-                            critical
-                          </span>
-                        )}
-                        <span className="block text-xs text-slate-500 mt-0.5">
-                          {CAPABILITY_LABELS[cap] ?? cap}
-                        </span>
-                      </span>
-                    </label>
-                  )
-                })}
-              </div>
-              <p className="text-xs text-slate-500 mt-2">
-                Critical capabilities require approval in manual mode and generate audit logs.
-              </p>
-            </div>
-
-            <div>
-              <label className="form-label">Explicit Tools</label>
-              <input
-                className="form-input font-mono text-xs"
-                value={explicitToolsInput}
-                onChange={e => setExplicitToolsInput(e.target.value)}
-                placeholder="e.g. filesystem.read, logs.search"
-              />
-              <p className="text-xs text-slate-500 mt-1">Comma-separated. Grant specific tools without enabling the full capability.</p>
-            </div>
-
-            <div>
-              <label className="form-label">Blocked Tools</label>
-              <input
-                className="form-input font-mono text-xs"
-                value={blockedToolsInput}
-                onChange={e => setBlockedToolsInput(e.target.value)}
-                placeholder="e.g. filesystem.search"
-              />
-              <p className="text-xs text-slate-500 mt-1">Comma-separated. Always blocked, even if granted by capability.</p>
-            </div>
-          </div>
-        </fieldset>
-
-        <div className="flex gap-3">
-          <button type="submit" className="btn-primary" disabled={saving}>
-            {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Agent'}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(s => !s)}
+            className="text-xs font-medium text-slate-400 hover:text-slate-200"
+          >
+            {showAdvanced ? '▾' : '▸'} Advanced parameters
           </button>
-          <button type="button" className="btn-ghost" onClick={() => navigate('/agents')}>
-            Cancel
-          </button>
+
+          {showAdvanced && (
+            <div className="space-y-4 border-t border-slate-800 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">Temperature</label>
+                  <input
+                    type="number" min="0" max="2" step="0.1" className="form-input"
+                    value={modelConfig.temperature}
+                    onChange={e => setModelConfig(prev => ({ ...prev, temperature: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Top P</label>
+                  <input
+                    type="number" min="0" max="1" step="0.05" className="form-input"
+                    value={modelConfig.top_p}
+                    onChange={e => setModelConfig(prev => ({ ...prev, top_p: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Context Window</label>
+                  <input
+                    type="number" min="512" step="512" className="form-input"
+                    value={modelConfig.context_window}
+                    onChange={e => setModelConfig(prev => ({ ...prev, context_window: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Max Tokens</label>
+                  <input
+                    type="number" min="64" step="64" className="form-input"
+                    value={modelConfig.max_tokens}
+                    onChange={e => setModelConfig(prev => ({ ...prev, max_tokens: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={modelConfig.stream}
+                  onChange={e => setModelConfig(prev => ({ ...prev, stream: e.target.checked }))}
+                  className="rounded border-slate-600 bg-slate-800 text-blue-500"
+                />
+                <span className="text-sm text-slate-300">Enable streaming</span>
+              </label>
+            </div>
+          )}
+        </section>
+
+        {/* Permissions master bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-100">Capabilities &amp; access</p>
+            <p className="text-xs text-slate-500">
+              {totalGranted === 0 ? 'Nothing granted yet' : `${totalGranted} item${totalGranted === 1 ? '' : 's'} granted`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={grantEverything}
+              className="btn-primary text-xs"
+            >
+              ⚡ Grant everything
+            </button>
+            <button
+              type="button"
+              onClick={revokeEverything}
+              disabled={totalGranted === 0}
+              className="btn-ghost text-xs disabled:opacity-40"
+            >
+              Revoke all
+            </button>
+          </div>
         </div>
+
+        <MultiSelectSection
+          title="Capabilities"
+          icon="🛡️"
+          hint="Capabilities grant groups of tools. Critical ones (amber) require approval in manual mode and are audit-logged."
+          items={capabilityItems}
+          selected={toolsConfig.capabilities}
+          onChange={caps => setToolsConfig(prev => ({ ...prev, capabilities: caps }))}
+          emptyText="No capabilities available."
+        />
+
+        <MultiSelectSection
+          title="Skills"
+          icon="🧩"
+          hint="Skills shape the agent's behavior via the prompt — they don't execute code."
+          items={skillItems}
+          selected={selectedSkillIds}
+          onChange={setSelectedSkillIds}
+          emptyText="No skills available."
+          showChips
+        />
+
+        <MultiSelectSection
+          title="Plugins"
+          icon="🔌"
+          hint="Plugins add local tools and skills. Their tools still respect capabilities, explicit and blocked tools."
+          items={pluginItems}
+          selected={selectedPluginIds}
+          onChange={setSelectedPluginIds}
+          emptyText="No plugins installed."
+        />
+
+        <MultiSelectSection
+          title="MCP Servers"
+          icon="🛰️"
+          hint="MCP servers add tools via local stdio processes. The server must be linked to the agent, and the tool still needs a capability or explicit grant."
+          items={mcpItems}
+          selected={selectedMcpServerIds}
+          onChange={setSelectedMcpServerIds}
+          emptyText="No MCP servers configured."
+        />
+
+        {/* Fine-grained overrides */}
+        <section className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <span aria-hidden>🎯</span>
+            <h3 className="text-sm font-semibold text-slate-100">Fine-grained tool overrides</h3>
+          </div>
+          <div>
+            <label className="form-label">Explicit Tools</label>
+            <input
+              className="form-input font-mono text-xs"
+              value={explicitToolsInput}
+              onChange={e => setExplicitToolsInput(e.target.value)}
+              placeholder="e.g. filesystem.read, logs.search"
+            />
+            <p className="text-xs text-slate-500 mt-1">Comma-separated. Grant specific tools without enabling the full capability.</p>
+          </div>
+          <div>
+            <label className="form-label">Blocked Tools</label>
+            <input
+              className="form-input font-mono text-xs"
+              value={blockedToolsInput}
+              onChange={e => setBlockedToolsInput(e.target.value)}
+              placeholder="e.g. filesystem.search"
+            />
+            <p className="text-xs text-slate-500 mt-1">Comma-separated. Always blocked, even if granted by a capability.</p>
+          </div>
+        </section>
       </form>
+
+      {/* Sticky action bar */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-800 bg-slate-950/90 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
+          <p className="text-xs text-slate-500">
+            <span className="text-slate-300">{toolsConfig.capabilities.length}</span> caps ·{' '}
+            <span className="text-slate-300">{selectedSkillIds.length}</span> skills ·{' '}
+            <span className="text-slate-300">{selectedPluginIds.length}</span> plugins ·{' '}
+            <span className="text-slate-300">{selectedMcpServerIds.length}</span> mcp
+          </p>
+          <div className="flex gap-2">
+            <button type="button" className="btn-ghost" onClick={() => navigate('/agents')}>Cancel</button>
+            <button type="submit" form="agent-form" className="btn-primary" disabled={saving}>
+              {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Agent'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
