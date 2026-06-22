@@ -59,7 +59,7 @@ export function WorkspaceForm() {
       } else {
         await workspacesApi.create(payload)
       }
-      navigate('/workspaces')
+      navigate('/config/workspaces')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -73,7 +73,7 @@ export function WorkspaceForm() {
     <div>
       <TopBar
         title={isEdit ? 'Edit Workspace' : 'New Workspace'}
-        actions={<button className="btn-ghost" onClick={() => navigate('/workspaces')}>Cancel</button>}
+        actions={<button className="btn-ghost" onClick={() => navigate('/config/workspaces')}>Cancel</button>}
       />
 
       <form onSubmit={handleSubmit} className="space-y-5 max-w-xl">
@@ -141,7 +141,7 @@ export function WorkspaceForm() {
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Workspace'}
           </button>
-          <button type="button" className="btn-ghost" onClick={() => navigate('/workspaces')}>
+          <button type="button" className="btn-ghost" onClick={() => navigate('/config/workspaces')}>
             Cancel
           </button>
         </div>

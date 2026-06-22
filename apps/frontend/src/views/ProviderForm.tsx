@@ -64,7 +64,7 @@ export function ProviderForm() {
       } else {
         await providersApi.create(payload)
       }
-      navigate('/providers')
+      navigate('/config/providers')
     } catch (e) {
       setError(String(e))
     } finally {
@@ -79,7 +79,7 @@ export function ProviderForm() {
       <TopBar
         title={isEdit ? 'Edit Provider' : 'Add Provider'}
         actions={
-          <button className="btn-ghost" onClick={() => navigate('/providers')}>
+          <button className="btn-ghost" onClick={() => navigate('/config/providers')}>
             Cancel
           </button>
         }
@@ -152,7 +152,7 @@ export function ProviderForm() {
           <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Provider'}
           </button>
-          <button type="button" className="btn-ghost" onClick={() => navigate('/providers')}>
+          <button type="button" className="btn-ghost" onClick={() => navigate('/config/providers')}>
             Cancel
           </button>
         </div>

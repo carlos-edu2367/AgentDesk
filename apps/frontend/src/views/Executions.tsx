@@ -70,11 +70,6 @@ export function Executions() {
       <TopBar
         title="Executions"
         description="History of agent runs"
-        actions={
-          <button className="btn-primary" onClick={() => navigate('/executions/run')}>
-            Run Agent
-          </button>
-        }
       />
 
       {/* Filter tabs */}
@@ -152,14 +147,7 @@ export function Executions() {
       {filtered.length === 0 ? (
         <EmptyState
           title={filter === 'all' ? 'No executions yet' : `No ${filter} executions`}
-          description={filter === 'all' ? 'Run an agent to see executions here.' : undefined}
-          action={
-            filter === 'all' ? (
-              <button className="btn-primary" onClick={() => navigate('/executions/run')}>
-                Run Agent
-              </button>
-            ) : undefined
-          }
+          description={filter === 'all' ? 'Start a chat with an agent to see executions here.' : undefined}
         />
       ) : (
         <div className="space-y-2">

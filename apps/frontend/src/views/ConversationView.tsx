@@ -299,7 +299,7 @@ export function ConversationView() {
                 {workspaces.length === 0 ? (
                   <p className="text-xs text-slate-500">
                     No workspaces.{' '}
-                    <button type="button" className="underline" onClick={() => navigate('/workspaces')}>
+                    <button type="button" className="underline" onClick={() => navigate('/config/workspaces')}>
                       Create one
                     </button>{' '}
                     to let this chat read/write files or run commands.

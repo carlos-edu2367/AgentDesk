@@ -46,10 +46,11 @@ describe('Executions list', () => {
     })
   })
 
-  it('shows Run Agent button', async () => {
+  it('no longer shows a Run Agent button', async () => {
     render(<MemoryRouter><Executions /></MemoryRouter>)
     await waitFor(() => {
-      expect(screen.getByText('Run Agent')).toBeInTheDocument()
+      expect(screen.getAllByText('completed').length).toBeGreaterThan(0)
     })
+    expect(screen.queryByText('Run Agent')).not.toBeInTheDocument()
   })
 })

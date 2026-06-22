@@ -248,7 +248,7 @@ export function ExecutionDetail() {
                 {cancelling ? 'Cancelling...' : 'Cancel'}
               </button>
             )}
-            <button className="btn-ghost text-xs" onClick={() => navigate('/executions')}>
+            <button className="btn-ghost text-xs" onClick={() => navigate('/config/executions')}>
               Back
             </button>
           </div>
