@@ -98,9 +98,10 @@ def register_core_tools() -> None:
         FilesystemMoveTool,
         FilesystemCopyTool,
     )
-    from app.tools.core.filesystem_edit import FilesystemEditTool
-    from app.tools.core.terminal import TerminalExecTool
+    from app.tools.core.filesystem_edit import FilesystemEditTool, FilesystemMultiEditTool
+    from app.tools.core.terminal import TerminalExecTool, TerminalPollTool
     from app.tools.core.http_tool import HttpRequestTool
+    from app.tools.core.web_search import WebSearchTool
     from app.tools.core.workspace import WorkspaceGetTool, WorkspaceListTool
     from app.tools.core.logs import LogsGetExecutionTool, LogsSearchTool
     from app.tools.core.memory import (
@@ -123,13 +124,16 @@ def register_core_tools() -> None:
         # Critical filesystem
         FilesystemWriteTool(),
         FilesystemEditTool(),
+        FilesystemMultiEditTool(),
         FilesystemDeleteTool(),
         FilesystemMoveTool(),
         FilesystemCopyTool(),
         # Terminal
         TerminalExecTool(),
-        # HTTP
+        TerminalPollTool(),
+        # HTTP / Web
         HttpRequestTool(),
+        WebSearchTool(),
         # Workspace
         WorkspaceListTool(),
         WorkspaceGetTool(),

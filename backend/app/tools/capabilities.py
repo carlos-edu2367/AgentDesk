@@ -11,6 +11,7 @@ CAPABILITIES: Dict[str, List[str]] = {
     "filesystem_write": [
         "filesystem.write",
         "filesystem.edit",
+        "filesystem.multi_edit",
         "filesystem.move",
         "filesystem.copy",
     ],
@@ -19,9 +20,13 @@ CAPABILITIES: Dict[str, List[str]] = {
     ],
     "terminal": [
         "terminal.exec",
+        "terminal.poll",
     ],
     "http": [
         "http.request",
+    ],
+    "web": [
+        "web.search",
     ],
     "workspace": [
         "workspace.list",
@@ -63,21 +68,25 @@ NATIVE_TOOLS = frozenset({
 CRITICAL_TOOLS = frozenset({
     "filesystem.write",
     "filesystem.edit",
+    "filesystem.multi_edit",
     "filesystem.delete",
     "filesystem.move",
     "filesystem.copy",
     "terminal.exec",
     "http.request",
+    "web.search",
 })
 
 TOOL_RISK_LEVELS: Dict[str, str] = {
     "filesystem.write": "medium",
     "filesystem.edit": "medium",
+    "filesystem.multi_edit": "medium",
     "filesystem.delete": "high",
     "filesystem.move": "medium",
     "filesystem.copy": "low",
     "terminal.exec": "high",
     "http.request": "medium",
+    "web.search": "low",
     "memory.search": "low",
     "memory.create": "low",
     "memory.update": "low",
@@ -92,11 +101,13 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
 TOOL_SUMMARIES: Dict[str, str] = {
     "filesystem.write": "Write content to a file",
     "filesystem.edit": "Replace an exact string in a file",
+    "filesystem.multi_edit": "Apply multiple edits to a file atomically",
     "filesystem.delete": "Delete a file or directory",
     "filesystem.move": "Move a file or directory",
     "filesystem.copy": "Copy a file or directory",
     "terminal.exec": "Execute a terminal command",
     "http.request": "Make an HTTP request",
+    "web.search": "Search the web",
     "memory.search": "Search stored memories",
     "memory.create": "Store a new memory entry",
     "memory.update": "Update an existing memory entry",

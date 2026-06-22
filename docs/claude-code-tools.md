@@ -190,16 +190,28 @@ da linha. Parâmetros: `path`, `pattern`, `glob` (filtro de arquivo, ex.: `*.js`
 
 ---
 
-## 7. Próximas lacunas úteis
+## 7. Tools adicionais (implementadas)
 
-1. **`filesystem.multi_edit`** — aplicar N substituições atômicas no mesmo
-   arquivo numa só chamada (tudo-ou-nada).
-2. **`terminal.exec` em background/streaming** — rodar dev server / testes longos
-   sem travar o turno.
-3. **`web.search`** — buscar na web (hoje só `http.request`, que exige a URL).
+Além do tripé, estas já existem:
 
-> `filesystem.read` por linhas (`offset`/`limit`) já foi implementado — fecha o
-> tripé localizar → ler → editar.
+- **`filesystem.multi_edit`** — várias substituições exatas num arquivo, numa só
+  chamada, **atômicas** (se qualquer edit falhar, nada é gravado). Edits rodam em
+  ordem, cada um sobre o resultado do anterior.
+  ([`filesystem_edit.py`](../backend/app/tools/core/filesystem_edit.py))
+- **`terminal.exec` com `background=true`** — inicia processos longos (dev server,
+  watcher) e retorna um `process_id` na hora, sem travar o turno; leia a saída
+  depois com **`terminal.poll`** (status, exit code, tail de stdout/stderr, e
+  `kill=true` para encerrar). ([`terminal.py`](../backend/app/tools/core/terminal.py))
+- **`web.search`** — busca na web via DuckDuckGo (sem API key), retorna
+  `{title, url, snippet}`. Para baixar uma URL específica, use `http.request`.
+  ([`web_search.py`](../backend/app/tools/core/web_search.py))
+
+### Próximas ideias
+
+- `terminal.poll` com **streaming incremental** real (hoje devolve o tail a cada
+  chamada; emitir deltas via event_bus exigiria o tool poder publicar eventos).
+- `filesystem.read` já suporta `offset`/`limit` de linhas — fecha o tripé
+  localizar → ler → editar.
 
 ---
 
