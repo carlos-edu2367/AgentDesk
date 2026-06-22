@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, renderHook } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { Agents } from '../views/Agents'
 import { conversationsApi } from '../api/conversations'
+import { usePrimaryTarget } from '../hooks/usePrimaryTarget'
 
 const navigate = vi.fn()
 
@@ -113,5 +114,22 @@ describe('Agents list', () => {
       expect(conversationsApi.create).not.toHaveBeenCalled()
       expect(navigate).toHaveBeenCalledWith('/conversations/conv_existing')
     })
+  })
+
+  it('pins an agent as primary', async () => {
+    localStorage.clear()
+    render(<MemoryRouter><Agents /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByText('Test Agent')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /set as primary/i }))
+
+    const { result } = renderHook(() => usePrimaryTarget())
+    expect(result.current.primary).toEqual({ type: 'agent', id: 'agent_001' })
+  })
+
+  it('no longer shows a Run button', async () => {
+    render(<MemoryRouter><Agents /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByText('Test Agent')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument()
   })
 })

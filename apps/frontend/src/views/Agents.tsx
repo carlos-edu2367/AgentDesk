@@ -6,10 +6,12 @@ import { LoadingState } from '../components/LoadingState'
 import { ErrorState } from '../components/ErrorState'
 import { agentsApi } from '../api/agents'
 import { conversationsApi } from '../api/conversations'
+import { usePrimaryTarget } from '../hooks/usePrimaryTarget'
 import type { Agent } from '../types/domain'
 
 export function Agents() {
   const navigate = useNavigate()
+  const { isPrimary, setPrimary } = usePrimaryTarget()
   const [agents, setAgents] = useState<Agent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -91,18 +93,20 @@ export function Agents() {
                   <span>Temp: {agent.model_config.temperature}</span>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
+              <div className="flex gap-2 shrink-0 items-center">
+                <button
+                  className={`text-xs px-2 ${isPrimary('agent', agent.id) ? 'text-amber-400' : 'text-slate-500 hover:text-amber-400'}`}
+                  title={isPrimary('agent', agent.id) ? 'Primary agent' : 'Set as primary'}
+                  aria-label={isPrimary('agent', agent.id) ? 'Primary agent' : 'Set as primary'}
+                  onClick={() => setPrimary({ type: 'agent', id: agent.id })}
+                >
+                  {isPrimary('agent', agent.id) ? '★' : '☆'}
+                </button>
                 <button
                   className="btn-primary text-xs"
                   onClick={() => handleChat(agent)}
                 >
                   Chat
-                </button>
-                <button
-                  className="btn-secondary text-xs"
-                  onClick={() => navigate(`/executions/run?agent=${agent.id}`)}
-                >
-                  Run
                 </button>
                 <button
                   className="btn-ghost text-xs"
