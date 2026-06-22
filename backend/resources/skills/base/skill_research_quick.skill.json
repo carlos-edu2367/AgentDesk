@@ -1,0 +1,11 @@
+{
+  "id": "skill_research_quick",
+  "name": "Quick Research",
+  "version": "0.1.0",
+  "description": "Use for a fast, scoped factual lookup.",
+  "tags": ["research"],
+  "prompt": "When to use: a focused factual question that needs a quick, reliable answer.\nProcess: 1) Pin down exactly what's being asked and any scope/time bounds. 2) Gather from the most authoritative sources available. 3) Cross-check the key fact against a second source when it matters. 4) Answer directly, then support.\nOutput: the direct answer first, then Supporting points with sources, then an explicit Confidence note (high/medium/low) and any caveats or staleness.\nRules: cite sources for non-obvious claims. Distinguish fact from inference. If sources conflict or are missing, say so rather than guessing. State the knowledge cut-off / recency limit when relevant. Keep it tight — this is the fast path, not deep research.",
+  "examples": [
+    {"input": "What's the default port for PostgreSQL?", "behavior": "Give the direct answer first, a supporting source, and a confidence note — without padding."}
+  ]
+}

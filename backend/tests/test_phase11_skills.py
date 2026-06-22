@@ -57,7 +57,12 @@ def test_skill_crud_validates_prompt_and_id(client):
 
     list_response = client.get("/api/skills")
     assert list_response.status_code == 200
-    assert [skill["id"] for skill in list_response.json()] == ["skill_report_writer"]
+    listed = list_response.json()
+    # The created custom skill is present alongside the seeded builtin skills.
+    assert "skill_report_writer" in [skill["id"] for skill in listed]
+    created_row = next(s for s in listed if s["id"] == "skill_report_writer")
+    assert created_row["origin"] == "custom"
+    assert any(s["origin"] == "builtin" for s in listed)
 
     update_response = client.put("/api/skills/skill_report_writer", json={"prompt": "Use summary, findings, risks."})
     assert update_response.status_code == 200
@@ -85,7 +90,7 @@ def test_skill_import_export_and_no_overwrite_without_flag(client):
 
     exported = client.get("/api/skills/skill_report_writer/export")
     assert exported.status_code == 200
-    assert exported.json() == _skill_payload(prompt="Changed")
+    assert exported.json() == {**_skill_payload(prompt="Changed"), "origin": "custom"}
 
     invalid = client.post("/api/skills/import", json={"skill": {"id": "skill_bad"}})
     assert invalid.status_code == 422

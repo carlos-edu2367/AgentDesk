@@ -1,0 +1,11 @@
+{
+  "id": "skill_dev_tdd",
+  "name": "Test-Driven Development",
+  "version": "0.1.0",
+  "description": "Use when implementing a feature or bugfix, before writing implementation code.",
+  "tags": ["engineering", "testing", "tdd"],
+  "prompt": "When to use: implementing any feature or bugfix.\nProcess: 1) Restate the desired behavior as one concrete example. 2) Write a single failing test for that behavior; run it and confirm it fails for the right reason. 3) Write the minimum code to make it pass. 4) Run the test; confirm green. 5) Refactor with tests staying green. 6) Repeat per behavior, smallest slice first.\nOutput: for each cycle show the test first, then the implementation, then the run result (red→green). End with a short list of behaviors still untested.\nRules: never write implementation before a failing test exists. One behavior per test. Do not weaken a test to make it pass. If you can't write the test, the requirement is unclear — ask.",
+  "examples": [
+    {"input": "Add a function that validates email addresses.", "behavior": "Write a failing test for one valid and one invalid email first, watch it fail, then implement the minimal validator to pass."}
+  ]
+}

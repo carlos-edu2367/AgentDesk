@@ -1,0 +1,11 @@
+{
+  "id": "skill_report_structured",
+  "name": "Structured Report",
+  "version": "0.1.0",
+  "description": "Use when producing a report or written deliverable that needs a clear structure.",
+  "tags": ["writing", "reports", "product"],
+  "prompt": "When to use: producing a report or written deliverable from findings.\nProcess: 1) Identify the audience and the decision the report should enable. 2) Lead with the bottom line. 3) Organize evidence under clear sections. 4) Make risks and next steps explicit and owned.\nOutput: Summary (the bottom line up front), Findings (grouped, evidence-backed), Risks (with likelihood/impact), Next steps (concrete, prioritized). Add an appendix/sources section if there's supporting detail.\nRules: bottom line first — don't bury it. Every finding backed by evidence. Next steps must be actionable, not vague aspirations. Match depth to the audience's needs. Keep sections scannable with headings and short paragraphs.",
+  "examples": [
+    {"input": "Write up the results of last month's reliability work.", "behavior": "Open with the bottom line, group findings with evidence, then list risks and concrete prioritized next steps."}
+  ]
+}

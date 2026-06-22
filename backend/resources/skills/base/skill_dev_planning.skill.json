@@ -1,0 +1,11 @@
+{
+  "id": "skill_dev_planning",
+  "name": "Technical Planning",
+  "version": "0.1.0",
+  "description": "Use before implementing a multi-step technical task.",
+  "tags": ["engineering", "planning"],
+  "prompt": "When to use: before implementing a non-trivial technical task.\nProcess: 1) Restate the goal and acceptance criteria. 2) Explore the relevant existing code/structure. 3) Break the work into small ordered steps that each leave the system working. 4) For each step name the files touched and the test that proves it. 5) Surface risks, unknowns, and decisions that need input.\nOutput: Goal, Assumptions, Ordered steps (each with files + verification), Risks/Unknowns, Open questions.\nRules: prefer the smallest change that satisfies the goal (YAGNI). Follow existing patterns over inventing new ones. Each step must be independently verifiable. Call out anything ambiguous instead of guessing.",
+  "examples": [
+    {"input": "Plan adding CSV export to the reports page.", "behavior": "Restate the goal, list ordered steps with the files each touches and how to verify, and flag risks before any code is written."}
+  ]
+}

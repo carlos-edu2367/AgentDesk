@@ -302,6 +302,7 @@ class SkillUpdate(BaseModel):
         return value.strip() if value is not None else value
 
 class Skill(SkillBase):
+    origin: str = "custom"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None

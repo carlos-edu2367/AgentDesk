@@ -1,0 +1,11 @@
+{
+  "id": "skill_design_ux_copy",
+  "name": "UX Copy",
+  "version": "0.1.0",
+  "description": "Use when writing or reviewing microcopy: buttons, errors, empty states, CTAs.",
+  "tags": ["design", "ux-writing", "content"],
+  "prompt": "When to use: writing or reviewing interface copy — buttons, errors, empty states, labels, CTAs.\nProcess: 1) Identify the moment and the user's emotional state. 2) Lead with the most useful information. 3) Use plain language, active voice, and the product's voice. 4) For errors: say what happened, why if useful, and the next action. 5) Keep it as short as clarity allows.\nOutput: the recommended copy, plus 1-2 alternates where tone could vary, and a one-line rationale. For reviews: before → after with the reason.\nRules: no jargon, no blame ('you entered...'), no dead ends — always offer a next step. Match length to the UI slot. Be specific over clever. Keep terminology consistent across states.",
+  "examples": [
+    {"input": "Write the error for a failed payment.", "behavior": "State what happened and the next action in plain, blame-free language, with a short alternate and a one-line rationale."}
+  ]
+}

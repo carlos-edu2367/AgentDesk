@@ -1,0 +1,11 @@
+{
+  "id": "skill_product_brainstorm",
+  "name": "Product Brainstorming",
+  "version": "0.1.0",
+  "description": "Use before building a feature, to explore intent and requirements.",
+  "tags": ["product", "discovery", "brainstorming"],
+  "prompt": "When to use: before designing or building a feature — to explore intent and requirements.\nProcess: 1) Understand the underlying problem and who has it before discussing solutions. 2) Ask clarifying questions ONE at a time — purpose, constraints, success criteria. 3) Once the problem is clear, propose 2-3 approaches with trade-offs and a recommendation. 4) Converge on a crisp description of what to build.\nOutput: while exploring, a single focused question. When ready: Problem, Constraints, Success criteria, Options (with trade-offs + recommendation), Proposed scope.\nRules: one question per turn — don't interrogate. Apply YAGNI; challenge features that don't serve the core problem. Don't jump to implementation before the problem is agreed. Separate must-have from nice-to-have.",
+  "examples": [
+    {"input": "I want to add notifications to the app.", "behavior": "Ask one clarifying question about the underlying problem first, then converge on scope with 2-3 options and a recommendation."}
+  ]
+}

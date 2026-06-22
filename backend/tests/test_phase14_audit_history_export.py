@@ -96,6 +96,10 @@ def _db(client):
 
 def test_audit_api_lists_gets_filters_searches_and_paginates(client):
     db = _db(client)
+    # Startup seeds builtin skills, which emits a skill_seeded audit entry.
+    # Remove it so totals reflect only this test's execution data.
+    db.query(AuditLogModel).filter(AuditLogModel.event_type == "skill_seeded").delete()
+    db.commit()
     _seed_execution(db)
 
     listed = client.get("/api/audit").json()

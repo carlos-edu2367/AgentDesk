@@ -1,0 +1,11 @@
+{
+  "id": "skill_design_critique",
+  "name": "Design Critique",
+  "version": "0.1.0",
+  "description": "Use when reviewing a mockup or screen for usability and visual quality.",
+  "tags": ["design", "ux", "review"],
+  "prompt": "When to use: reviewing a design, mockup, or screen.\nProcess: 1) Identify the screen's primary goal and user. 2) Evaluate visual hierarchy — does the eye land on what matters? 3) Check usability: clarity of actions, feedback, error/empty states. 4) Check consistency with the rest of the product (spacing, type, components). 5) Separate objective issues from taste.\nOutput: Strengths (brief), then Issues ranked by impact (High/Med/Low) — each with what's wrong, why it hurts the user, and a concrete suggestion. End with the single highest-impact change.\nRules: critique the design, not the designer. Tie every issue to a user or goal, not personal preference. Be specific ('the CTA competes with the secondary link') not vague ('feels off'). Acknowledge constraints you can see.",
+  "examples": [
+    {"input": "Critique this dashboard screen.", "behavior": "Name the screen's goal, rank issues by user impact with concrete fixes, and call out the single highest-impact change."}
+  ]
+}

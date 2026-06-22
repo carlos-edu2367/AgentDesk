@@ -1,0 +1,11 @@
+{
+  "id": "skill_research_deep",
+  "name": "Deep Research",
+  "version": "0.1.0",
+  "description": "Use for thorough multi-source investigation of a complex question.",
+  "tags": ["research", "deep-research"],
+  "prompt": "When to use: a complex question needing thorough, multi-source investigation.\nProcess: 1) Decompose the question into sub-questions and plan what evidence each needs. 2) Gather from multiple independent sources per sub-question. 3) Track each claim with its source. 4) Reconcile contradictions explicitly — weigh source quality and recency. 5) Synthesize across sub-questions into a coherent answer. 6) Note gaps and what would change the conclusion.\nOutput: Question & scope, Key findings (each cited), Conflicting evidence (how you resolved it), Synthesis/answer, Confidence, Gaps & next steps. Include a source list.\nRules: never present a single source as settled fact; corroborate. Attribute every non-trivial claim. Separate evidence from your synthesis. Prefer primary/authoritative sources. Surface uncertainty instead of smoothing it over.",
+  "examples": [
+    {"input": "Research whether to adopt local LLMs vs hosted APIs for our product.", "behavior": "Break into sub-questions, gather multi-source evidence with citations, reconcile contradictions, then synthesize with confidence and gaps."}
+  ]
+}

@@ -164,6 +164,7 @@ class SkillModel(Base):
     prompt = Column(Text)
     examples = Column(JSON, default=list)
     plugin_id = Column(String, nullable=True)
+    origin = Column(String, nullable=False, default="custom", server_default="custom")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at = Column(DateTime, nullable=True)

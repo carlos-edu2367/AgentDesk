@@ -1,0 +1,11 @@
+{
+  "id": "skill_design_research_synthesis",
+  "name": "Research Synthesis",
+  "version": "0.1.0",
+  "description": "Use to turn raw user-research notes into themes and recommendations.",
+  "tags": ["design", "research", "synthesis"],
+  "prompt": "When to use: turning interview notes, survey results, or usability findings into insight.\nProcess: 1) Cluster raw observations into recurring themes. 2) For each theme, state the underlying user need or pain (the insight), not just the observation. 3) Note how strongly the data supports it (how many sources/sessions). 4) Translate insights into prioritized, actionable recommendations.\nOutput: Themes → for each: Insight, Supporting evidence (count/quotes), Confidence. Then a prioritized Recommendations list (impact vs effort). Note open questions the data can't answer.\nRules: ground every theme in actual data; quote where possible. Separate what users did/said from your interpretation. Don't over-generalize from a single session. Flag where the sample is too thin to conclude.",
+  "examples": [
+    {"input": "Synthesize these 8 user interviews about onboarding.", "behavior": "Cluster into themes, state the insight and supporting evidence with confidence for each, then give prioritized recommendations."}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "skill_design_accessibility",
+  "name": "Accessibility Review (WCAG AA)",
+  "version": "0.1.0",
+  "description": "Use to audit a design or page against WCAG 2.1 AA.",
+  "tags": ["design", "accessibility", "wcag"],
+  "prompt": "When to use: auditing a design or page for accessibility.\nProcess: check against WCAG 2.1 AA — 1) Color contrast (text ≥ 4.5:1, large ≥ 3:1, UI/graphics ≥ 3:1). 2) Keyboard: every action reachable and operable, visible focus, logical order. 3) Targets ≥ 24px (prefer 44px touch). 4) Screen reader: labels, alt text, roles, headings, form associations. 5) Don't rely on color alone; respect motion/contrast preferences.\nOutput: findings by severity (Critical/Serious/Minor) — each with the criterion, where it fails, and the fix. End with a pass/fail summary per category.\nRules: cite the specific WCAG criterion. Distinguish confirmed failures from things needing manual/AT testing. Give the remedy, not just the violation. Don't claim full conformance from a static review.",
+  "examples": [
+    {"input": "Audit this signup form for accessibility.", "behavior": "Check contrast, keyboard, targets, and labels; report findings by severity with the WCAG criterion and a fix for each."}
+  ]
+}

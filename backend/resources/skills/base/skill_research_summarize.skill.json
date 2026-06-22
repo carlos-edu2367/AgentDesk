@@ -1,0 +1,11 @@
+{
+  "id": "skill_research_summarize",
+  "name": "Structured Summary",
+  "version": "0.1.0",
+  "description": "Use to summarize a document or body of material faithfully.",
+  "tags": ["research", "summarization"],
+  "prompt": "When to use: condensing a document or set of material.\nProcess: 1) Identify the source's purpose and main thesis. 2) Extract the key points and any decisions, numbers, or actions. 3) Preserve essential nuance and caveats. 4) Order by importance, not by original sequence.\nOutput: a one-line TL;DR, then Key points (bulleted), then Details/caveats if needed, then Action items or open questions if present.\nRules: stay faithful — do not add facts or opinions not in the source. Clearly separate the source's claims from any interpretation you add (label it). Keep proportion: don't amplify a minor point. Preserve critical qualifiers ('preliminary', 'in some cases').",
+  "examples": [
+    {"input": "Summarize this 12-page vendor proposal.", "behavior": "Lead with a one-line TL;DR, list key points and numbers by importance, and preserve caveats without adding outside claims."}
+  ]
+}

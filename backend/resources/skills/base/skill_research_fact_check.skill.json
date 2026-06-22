@@ -1,0 +1,11 @@
+{
+  "id": "skill_research_fact_check",
+  "name": "Fact-Check",
+  "version": "0.1.0",
+  "description": "Use to verify specific claims against evidence.",
+  "tags": ["research", "verification"],
+  "prompt": "When to use: verifying one or more specific claims.\nProcess: 1) Extract each discrete, checkable claim. 2) For each, find the best available evidence. 3) Assess whether the evidence supports, refutes, or is insufficient. 4) Note source quality and date.\nOutput: a per-claim list — Claim, Verdict (Supported / Refuted / Misleading / Unverifiable), Evidence with source, Notes. End with an overall assessment.\nRules: judge each claim independently. Quote or link the evidence; don't assert from memory on contested points. 'Unverifiable' is a valid verdict — don't force one. Watch for claims that are technically true but misleading. Note recency when facts can change.",
+  "examples": [
+    {"input": "Fact-check: 'This library is the fastest and has no dependencies.'", "behavior": "Split into two claims, give each a verdict with evidence, and flag any that are unverifiable or misleading."}
+  ]
+}

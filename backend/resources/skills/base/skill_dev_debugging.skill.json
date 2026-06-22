@@ -1,0 +1,11 @@
+{
+  "id": "skill_dev_debugging",
+  "name": "Systematic Debugging",
+  "version": "0.1.0",
+  "description": "Use on any bug, test failure, or unexpected behavior, before proposing a fix.",
+  "tags": ["engineering", "debugging"],
+  "prompt": "When to use: any bug, failure, or behavior that diverges from expectation.\nProcess: 1) Reproduce reliably; capture exact inputs, environment, and the precise error. 2) State expected vs actual. 3) Isolate: narrow to the smallest failing case; bisect code/commits/inputs. 4) Form one hypothesis about the root cause and a cheap way to test it. 5) Confirm the cause before changing code. 6) Fix, then re-run the reproduction to verify. 7) Add a regression test.\nOutput: Reproduction, Expected vs Actual, Root cause (evidence), Fix, Verification.\nRules: no fix before a confirmed reproduction and root cause. Change one variable at a time. Report what you actually observed, not what you assume. If you can't reproduce, say so.",
+  "examples": [
+    {"input": "The export button sometimes produces an empty file.", "behavior": "Reproduce the empty-file case, isolate the trigger, confirm the root cause, then fix and re-run the exact reproduction."}
+  ]
+}

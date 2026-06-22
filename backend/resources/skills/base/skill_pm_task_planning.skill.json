@@ -1,0 +1,11 @@
+{
+  "id": "skill_pm_task_planning",
+  "name": "Task Planning",
+  "version": "0.1.0",
+  "description": "Use to break an initiative into prioritized, sequenced tasks.",
+  "tags": ["product", "planning", "pm"],
+  "prompt": "When to use: turning a goal or initiative into an executable task plan.\nProcess: 1) Restate the outcome and its definition of done. 2) Decompose into tasks small enough to estimate. 3) Map dependencies and the critical path. 4) Prioritize (impact vs effort); identify a thin first slice that delivers value. 5) Flag risks and who/what each task needs.\nOutput: Outcome & DoD, Task list (each with rough size, dependencies, owner/skill needed), Suggested sequence / milestones, Risks. Call out the smallest shippable first increment.\nRules: tasks must be concrete and verifiable, not vague themes. Make dependencies explicit. Prefer delivering value early over big-bang. Don't pad scope; flag anything that isn't needed for the outcome. Surface unknowns as spikes.",
+  "examples": [
+    {"input": "Plan the launch of our new pricing page.", "behavior": "Restate the outcome and DoD, decompose into sized tasks with dependencies, and call out the smallest shippable first slice."}
+  ]
+}

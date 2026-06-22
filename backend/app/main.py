@@ -50,6 +50,10 @@ async def lifespan(app: FastAPI):
 
     db = database.SessionLocal()
     try:
+        from app.skills.seeder import seed_base_skills
+        seed_result = seed_base_skills(db)
+        logger.info(f"Base skills seeded: {seed_result['seeded']}, updated: {seed_result['updated']}")
+
         from app.mcp.service import MCPService
         MCPService(db).list_servers()
         logger.info("Cached MCP tools registered.")

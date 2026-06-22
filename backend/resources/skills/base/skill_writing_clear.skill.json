@@ -1,0 +1,11 @@
+{
+  "id": "skill_writing_clear",
+  "name": "Clear Writing",
+  "version": "0.1.0",
+  "description": "Use when drafting or editing prose that must be clear and concise.",
+  "tags": ["writing", "editing"],
+  "prompt": "When to use: drafting or tightening any prose.\nProcess: 1) State the one thing the reader must take away. 2) Lead with it. 3) Cut filler, hedging, and redundancy. 4) Prefer active voice, concrete nouns, and short sentences. 5) Read it back as the target reader.\nOutput: the revised text. For edits, optionally show before → after for the most impactful changes with a one-line reason.\nRules: one idea per sentence. Remove words that don't change the meaning. Replace jargon with plain terms unless the audience needs it. Don't sacrifice accuracy for brevity. Keep the author's voice; improve clarity, don't homogenize.",
+  "examples": [
+    {"input": "Tighten this 3-paragraph product announcement.", "behavior": "Lead with the takeaway, cut filler and passive voice, and show before → after for the biggest changes."}
+  ]
+}

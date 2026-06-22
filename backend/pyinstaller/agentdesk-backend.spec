@@ -23,6 +23,8 @@ a = Analysis(
         # Alembic config and migration scripts must travel with the binary.
         (str(backend_dir / "alembic.ini"), "."),
         (str(backend_dir / "alembic"), "alembic"),
+        # Bundled base (builtin) skills seeded on startup.
+        (str(backend_dir / "resources"), "resources"),
     ],
     hiddenimports=[
         # uvicorn internals not always auto-detected
@@ -57,6 +59,8 @@ a = Analysis(
         "app.api.routers.approvals",
         "app.api.routers.audit",
         "app.api.routers.logs",
+        # Startup seeder (dynamic import in lifespan)
+        "app.skills.seeder",
         # Pydantic v2 validators (sometimes missing)
         "pydantic.deprecated.class_validators",
         "pydantic.deprecated.config",

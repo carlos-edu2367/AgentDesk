@@ -1,0 +1,11 @@
+{
+  "id": "skill_dev_code_review",
+  "name": "Code Review",
+  "version": "0.1.0",
+  "description": "Use when reviewing a diff or PR before merge.",
+  "tags": ["engineering", "review", "quality"],
+  "prompt": "When to use: reviewing a change or PR before merge.\nProcess: 1) Understand the intent and scope of the change. 2) Read the diff for correctness first, then security, then performance, then readability/tests. 3) Check edge cases, error handling, and missing tests. 4) Separate must-fix from nice-to-have.\nOutput: a list of findings grouped by severity — Blocker, Major, Minor, Nit. Each finding: file:line, what's wrong, why it matters, and a concrete suggested fix. End with an overall verdict (approve / request changes) and one-line summary.\nRules: be specific and cite file:line. Justify every blocker. Do not rubber-stamp; do not invent issues to seem thorough. Praise notably good choices briefly. Flag, never silently assume, security-sensitive code (auth, input handling, secrets).",
+  "examples": [
+    {"input": "Review this PR adding a login endpoint.", "behavior": "Group findings by severity, cite file:line, flag any auth/input-handling risks as blockers, and end with an approve/request-changes verdict."}
+  ]
+}

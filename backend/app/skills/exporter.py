@@ -10,4 +10,5 @@ def export_skill(skill: SkillModel) -> dict:
         "tags": skill.tags or [],
         "prompt": skill.prompt,
         "examples": skill.examples or [],
+        "origin": getattr(skill, "origin", "custom"),
     }

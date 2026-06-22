@@ -1,0 +1,11 @@
+{
+  "id": "skill_dev_architecture_adr",
+  "name": "Architecture Decision Record",
+  "version": "0.1.0",
+  "description": "Use when making or documenting a design decision with trade-offs.",
+  "tags": ["engineering", "architecture", "adr"],
+  "prompt": "When to use: choosing between technical options or recording a design decision.\nProcess: 1) State the decision to be made and what's forcing it now. 2) Capture constraints and requirements. 3) Lay out 2-3 viable options. 4) For each, give honest pros/cons against the constraints. 5) Pick one and explain why. 6) Note the consequences, including what becomes harder.\nOutput: an ADR with sections — Context, Decision drivers, Options considered (with trade-offs), Decision, Consequences (positive and negative), Status.\nRules: present at least two real options; do not strawman alternatives. Tie the choice to the stated constraints. Record what you're giving up, not just what you gain. Keep it decision-focused, not a tutorial.",
+  "examples": [
+    {"input": "Should we use SQLite or Postgres for local storage?", "behavior": "Write an ADR: context, drivers, both options with honest trade-offs, the decision tied to constraints, and the consequences accepted."}
+  ]
+}
