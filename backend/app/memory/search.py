@@ -57,30 +57,67 @@ def _model_to_result(m: MemoryModel, score: float, has_embedding: bool) -> Memor
     )
 
 
+import re
+
+# Common stop-words (PT + EN) ignored during keyword matching so a natural
+# question like "qual a minha cor favorita?" matches a memory titled
+# "Usuário gosta de azul".
+_STOPWORDS = frozenset({
+    "a", "o", "as", "os", "um", "uma", "de", "da", "do", "das", "dos", "e", "ou",
+    "que", "qual", "quais", "como", "para", "por", "com", "sem", "em", "no", "na",
+    "meu", "minha", "meus", "minhas", "seu", "sua", "me", "te", "se", "eu", "voce",
+    "the", "a", "an", "of", "and", "or", "to", "for", "with", "what", "which",
+    "how", "is", "are", "my", "your", "i", "you", "me", "do", "does",
+})
+
+
+def _tokenize(text: str) -> List[str]:
+    return [t for t in re.findall(r"\w+", (text or "").lower()) if len(t) > 2 and t not in _STOPWORDS]
+
+
 def search_text(db: Session, query: str, scopes: List[str], limit: int = 10) -> List[MemorySearchResult]:
-    """Full-text search across title, content, tags."""
+    """Keyword search across title, content, tags.
+
+    Scores by fraction of query tokens found, so a full-sentence query still
+    matches memories sharing only some keywords. Falls back to whole-string
+    substring matching for short/exact queries.
+    """
     q = db.query(MemoryModel).filter(MemoryModel.deleted_at == None)
     q = _apply_scope_filter(q, scopes)
     memories = q.all()
 
-    query_lower = query.lower()
+    query_lower = query.lower().strip()
+    tokens = _tokenize(query)
     results = []
     for m in memories:
         tags = m.tags if isinstance(m.tags, list) else (json.loads(m.tags) if m.tags else [])
         tags_str = " ".join(tags).lower()
         title_lower = (m.title or "").lower()
         content_lower = (m.content or "").lower()
+        haystack = f"{title_lower} {content_lower} {tags_str}"
 
         score = 0.0
-        if query_lower in title_lower:
-            score = max(score, 0.8)
-        if query_lower in content_lower:
-            score = max(score, 0.5)
-        if query_lower in tags_str:
-            score = max(score, 0.4)
+
+        # Whole-query substring match (strongest signal for short queries).
+        if query_lower:
+            if query_lower in title_lower:
+                score = max(score, 0.85)
+            elif query_lower in content_lower:
+                score = max(score, 0.55)
+            elif query_lower in tags_str:
+                score = max(score, 0.45)
+
+        # Token overlap (handles natural-language questions).
+        if tokens:
+            title_hits = sum(1 for t in tokens if t in title_lower)
+            body_hits = sum(1 for t in tokens if t in haystack)
+            if body_hits:
+                overlap = body_hits / len(tokens)
+                token_score = 0.5 * overlap + 0.3 * (title_hits / len(tokens))
+                score = max(score, min(token_score, 0.8))
 
         if score > 0.0:
-            results.append(_model_to_result(m, score, m.embedding_status == "done"))
+            results.append(_model_to_result(m, round(score, 4), m.embedding_status == "done"))
 
     results.sort(key=lambda r: r.score, reverse=True)
     return results[:limit]

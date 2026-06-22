@@ -1,6 +1,6 @@
 from typing import List
 
-from app.tools.capabilities import CAPABILITIES
+from app.tools.capabilities import CAPABILITIES, NATIVE_TOOLS
 from app.tools.errors import ToolDeniedError, ToolNotFoundError
 from app.tools.registry import tool_registry
 from app.tools.schemas import ToolDefinition
@@ -25,6 +25,9 @@ def check_tool_permission(
     if tool_name in blocked_tools:
         raise ToolDeniedError("TOOL_BLOCKED", f"Tool '{tool_name}' is explicitly blocked for this agent")
 
+    if tool_name in NATIVE_TOOLS:
+        return
+
     for cap in capabilities:
         if cap == "mcp" and tool_name.startswith("mcp."):
             return
@@ -46,6 +49,11 @@ def get_available_tool_definitions(
 ) -> List[ToolDefinition]:
     """Returns definitions of all tools this agent can use."""
     available: set = set()
+
+    # Native tools (memory) are available to every agent by default.
+    for name in NATIVE_TOOLS:
+        if tool_registry.exists(name):
+            available.add(name)
 
     for cap in capabilities:
         for name in CAPABILITIES.get(cap, []):

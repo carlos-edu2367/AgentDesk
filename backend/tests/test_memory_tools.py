@@ -7,7 +7,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.models import Base, MemoryModel
 from app.tools.base import ToolExecutionContext
-from app.tools.core.memory import MemorySearchTool, MemoryCreateTool
+from app.tools.core.memory import (
+    MemorySearchTool,
+    MemoryCreateTool,
+    MemoryUpdateTool,
+    MemoryDeleteTool,
+    MemoryListTool,
+)
 from app.tools.errors import ToolError
 
 
@@ -112,3 +118,80 @@ async def test_memory_create_tool_missing_content_raises(tmp_path, monkeypatch):
     tool = MemoryCreateTool()
     with pytest.raises(ToolError):
         await tool.execute({"title": "Tem título"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_update_tool(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "Cor favorita", "Azul")
+    tool = MemoryUpdateTool()
+    with patch("app.memory.service.get_embedding_for_memory", AsyncMock(return_value=None)):
+        result = await tool.execute(
+            {"memory_id": "m1", "content": "Verde", "importance": 0.9}, _ctx(db)
+        )
+    assert result["status"] == "updated"
+    assert db.query(MemoryModel).filter(MemoryModel.id == "m1").first().content == "Verde"
+
+
+@pytest.mark.asyncio
+async def test_memory_update_tool_missing_id_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    with pytest.raises(ToolError):
+        await MemoryUpdateTool().execute({"content": "x"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_update_tool_no_fields_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "T", "C")
+    with pytest.raises(ToolError):
+        await MemoryUpdateTool().execute({"memory_id": "m1"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_update_tool_not_found_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    with pytest.raises(ToolError):
+        await MemoryUpdateTool().execute({"memory_id": "nope", "content": "x"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_delete_tool(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "T", "C")
+    result = await MemoryDeleteTool().execute({"memory_id": "m1"}, _ctx(db))
+    assert result["status"] == "deleted"
+    assert db.query(MemoryModel).filter(MemoryModel.id == "m1").first().deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_memory_delete_tool_not_found_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    with pytest.raises(ToolError):
+        await MemoryDeleteTool().execute({"memory_id": "nope"}, _ctx(db))
+
+
+@pytest.mark.asyncio
+async def test_memory_list_tool(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "Prefere Python", "Usa Python")
+    _add_memory(db, "m2", "Prefere TS", "Usa TypeScript")
+    result = await MemoryListTool().execute({"scope": "global", "limit": 10}, _ctx(db))
+    assert result["count"] == 2
+    ids = {r["memory_id"] for r in result["results"]}
+    assert ids == {"m1", "m2"}
+
+
+@pytest.mark.asyncio
+async def test_memory_list_tool_invalid_scope_raises(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    with pytest.raises(ToolError):
+        await MemoryListTool().execute({"scope": "bogus"}, _ctx(db))

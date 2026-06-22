@@ -101,7 +101,13 @@ def register_core_tools() -> None:
     from app.tools.core.http_tool import HttpRequestTool
     from app.tools.core.workspace import WorkspaceGetTool, WorkspaceListTool
     from app.tools.core.logs import LogsGetExecutionTool, LogsSearchTool
-    from app.tools.core.memory import MemorySearchTool, MemoryCreateTool
+    from app.tools.core.memory import (
+        MemorySearchTool,
+        MemoryCreateTool,
+        MemoryUpdateTool,
+        MemoryDeleteTool,
+        MemoryListTool,
+    )
     from app.tools.core.agent_tools import AgentListTool, AgentCallTool
     from app.tools.core.team_tools import TeamListTool, TeamExecuteTool
 
@@ -129,6 +135,9 @@ def register_core_tools() -> None:
         # Memory
         MemorySearchTool(),
         MemoryCreateTool(),
+        MemoryUpdateTool(),
+        MemoryDeleteTool(),
+        MemoryListTool(),
         # Agent/team orchestration
         AgentListTool(),
         AgentCallTool(),

@@ -154,3 +154,57 @@ async def test_hybrid_search_combines_results(tmp_path, monkeypatch):
     with patch("app.memory.search.get_embedding_for_memory", mock_embed):
         results = await search_hybrid(db, "Relatorio", ["global"], limit=10)
     assert any(r.memory_id == "m1" for r in results)
+
+
+# --- Tokenized text search (natural-language queries) ---
+
+def test_text_search_matches_keywords_in_question(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "global", None, "Cor favorita do usuario", "O usuario gosta de azul")
+    # Whole-string substring would never match this question; tokens should.
+    results = search_text(db, "qual a minha cor favorita?", ["global"], limit=10)
+    assert any(r.memory_id == "m1" for r in results)
+
+
+def test_text_search_ignores_stopwords_only_query(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    _add_memory(db, "m1", "global", None, "Projeto X", "detalhes do projeto")
+    # Query made only of stopwords/short tokens shouldn't spuriously match.
+    results = search_text(db, "o que e", ["global"], limit=10)
+    assert results == []
+
+
+# --- Pinned recall ---
+
+def test_get_pinned_results_returns_high_importance_profile(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    db = _make_db()
+    from app.memory.service import MemoryService
+    # profile/preference with high importance -> pinned
+    db.add(MemoryModel(
+        id="p1", scope="global", scope_id=None, type="profile",
+        title="Nome", content="O usuario se chama Carlos", tags=[],
+        confidence=0.9, importance=0.9, source={}, usage_count=0,
+        embedding_status="pending",
+    ))
+    # low importance -> excluded
+    db.add(MemoryModel(
+        id="p2", scope="global", scope_id=None, type="preference",
+        title="Trivial", content="algo", tags=[],
+        confidence=0.5, importance=0.2, source={}, usage_count=0,
+        embedding_status="pending",
+    ))
+    # non-pinned type -> excluded
+    db.add(MemoryModel(
+        id="p3", scope="global", scope_id=None, type="lesson",
+        title="Licao", content="algo", tags=[],
+        confidence=0.9, importance=0.9, source={}, usage_count=0,
+        embedding_status="pending",
+    ))
+    db.commit()
+
+    pinned = MemoryService(db).get_pinned_results(["global"], limit=3)
+    ids = {r.memory_id for r in pinned}
+    assert ids == {"p1"}

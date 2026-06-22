@@ -179,6 +179,43 @@ def test_nonexistent_tool_raises_not_found():
         )
 
 
+def test_memory_tools_available_without_capability():
+    defs = get_available_tool_definitions(
+        capabilities=[],
+        explicit_tools=[],
+        blocked_tools=[],
+    )
+    names = {d.name for d in defs}
+    assert {"memory.search", "memory.create", "memory.update", "memory.delete", "memory.list"} <= names
+
+
+def test_memory_tool_permitted_without_capability():
+    # Should not raise — memory is native infrastructure.
+    check_tool_permission(
+        "memory.create",
+        capabilities=[],
+        explicit_tools=[],
+        blocked_tools=[],
+    )
+
+
+def test_memory_tool_can_be_blocked():
+    with pytest.raises(ToolDeniedError) as exc_info:
+        check_tool_permission(
+            "memory.create",
+            capabilities=[],
+            explicit_tools=[],
+            blocked_tools=["memory.create"],
+        )
+    assert exc_info.value.code == "TOOL_BLOCKED"
+    defs = get_available_tool_definitions(
+        capabilities=[],
+        explicit_tools=[],
+        blocked_tools=["memory.create"],
+    )
+    assert "memory.create" not in {d.name for d in defs}
+
+
 def test_get_available_tool_definitions_respects_blocked():
     defs = get_available_tool_definitions(
         capabilities=["filesystem_read"],

@@ -94,6 +94,31 @@ Approval Mode: {self.execution.approval_mode}
         lines.append("IMPORTANT: Respond with ONLY valid JSON. Do not add explanations outside the JSON.")
         return "\n".join(lines)
 
+    def _has_memory_tools(self) -> bool:
+        return any(t.name.startswith("memory.") for t in self.available_tools)
+
+    def _get_memory_instructions(self) -> str:
+        if not self._has_memory_tools():
+            return ""
+        return """[MEMORY SYSTEM]
+You have a long-term memory. Use it proactively across turns.
+
+When to WRITE (memory.create):
+- Whenever you learn a durable fact about the user: their name, role, language, preferences, tools/stack they use, recurring projects, goals, or constraints.
+- Decisions made, lessons learned, and workflows worth reusing later.
+Do NOT store secrets, passwords, or ephemeral chit-chat. Store one clear fact per memory, with a short descriptive title.
+
+When to UPDATE (memory.update) / DELETE (memory.delete):
+- If a known fact changed, update the existing memory instead of creating a duplicate.
+- If a fact is wrong or obsolete, delete it. Use memory.list or memory.search first to find the memory_id.
+
+Scope & type:
+- scope "global" for facts about the user/environment that any agent should know; scope "agent" for facts specific to you.
+- type: "profile" (who the user is), "preference" (how they like things), "project", "decision", "lesson", "workflow".
+
+Relevant memories already retrieved for this turn appear under [RELEVANT MEMORIES]. Trust them, and silently record any new durable facts you learn — never ask the user for permission to remember.
+"""
+
     def _get_memory_context(self) -> str:
         return self.memory_context
 
@@ -111,6 +136,7 @@ Approval Mode: {self.execution.approval_mode}
             self._get_operational_context(),
             self._get_tools_instructions(),
             self._get_skills_context(),
+            self._get_memory_instructions(),
             self._get_memory_context(),
             self._get_execution_context(),
         ]

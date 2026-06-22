@@ -32,6 +32,9 @@ CAPABILITIES: Dict[str, List[str]] = {
     "memory": [
         "memory.search",
         "memory.create",
+        "memory.update",
+        "memory.delete",
+        "memory.list",
     ],
     "agent_control": [
         "agent.list",
@@ -42,6 +45,18 @@ CAPABILITIES: Dict[str, List[str]] = {
         "team.execute",
     ],
 }
+
+# Tools every agent can always use, regardless of its capability list.
+# Memory is treated as native platform infrastructure (not a grantable
+# permission) so agents can persist and recall facts about the user by default.
+# Still subject to an agent's blocked_tools.
+NATIVE_TOOLS = frozenset({
+    "memory.search",
+    "memory.create",
+    "memory.update",
+    "memory.delete",
+    "memory.list",
+})
 
 CRITICAL_TOOLS = frozenset({
     "filesystem.write",
@@ -61,6 +76,9 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
     "http.request": "medium",
     "memory.search": "low",
     "memory.create": "low",
+    "memory.update": "low",
+    "memory.delete": "low",
+    "memory.list": "low",
     "agent.list": "low",
     "agent.call": "medium",
     "team.list": "low",
@@ -76,6 +94,9 @@ TOOL_SUMMARIES: Dict[str, str] = {
     "http.request": "Make an HTTP request",
     "memory.search": "Search stored memories",
     "memory.create": "Store a new memory entry",
+    "memory.update": "Update an existing memory entry",
+    "memory.delete": "Delete a memory entry",
+    "memory.list": "List stored memories",
     "agent.list": "List available agents",
     "agent.call": "Call another agent as a subagent",
     "team.list": "List available teams",

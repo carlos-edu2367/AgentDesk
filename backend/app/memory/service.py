@@ -14,11 +14,17 @@ from app.memory.embeddings import (
     EMBEDDING_MODEL, DEFAULT_OLLAMA_URL,
     get_embedding_for_memory, vector_to_json,
 )
-from app.memory.search import search_text, search_semantic, search_hybrid
+from app.domain.schemas import MemorySearchResult
+from app.memory.search import search_text, search_semantic, search_hybrid, _apply_scope_filter
 
 MAX_MEMORIES_PER_PROMPT = 8
 MAX_MEMORY_CHARS_PER_ITEM = 800
 MAX_TOTAL_MEMORY_CHARS = 4000
+
+# Types whose high-importance entries are always surfaced to the agent,
+# regardless of whether the current message matches them.
+PINNED_TYPES = ("profile", "preference")
+PINNED_IMPORTANCE_THRESHOLD = 0.6
 
 
 class MemoryService:
@@ -174,6 +180,37 @@ class MemoryService:
         else:
             results = await search_hybrid(self.db, request.query, request.scopes, request.limit, self.ollama_url)
         return MemorySearchResponse(results=results)
+
+    def get_pinned_results(self, scopes: List[str], limit: int = 3) -> List[MemorySearchResult]:
+        """High-importance profile/preference memories to always include in context."""
+        if not scopes:
+            return []
+        q = self.db.query(MemoryModel).filter(
+            MemoryModel.deleted_at == None,
+            MemoryModel.type.in_(PINNED_TYPES),
+            (MemoryModel.importance >= PINNED_IMPORTANCE_THRESHOLD),
+        )
+        q = _apply_scope_filter(q, scopes)
+        q = q.order_by(MemoryModel.importance.desc(), MemoryModel.updated_at.desc())
+        rows = q.limit(limit).all()
+
+        results = []
+        for m in rows:
+            tags = m.tags if isinstance(m.tags, list) else (json.loads(m.tags) if m.tags else [])
+            results.append(MemorySearchResult(
+                memory_id=m.id,
+                score=round(m.importance or 0.6, 4),
+                scope=m.scope,
+                scope_id=m.scope_id,
+                type=m.type,
+                title=m.title,
+                content=m.content,
+                tags=tags,
+                confidence=m.confidence or 0.5,
+                importance=m.importance or 0.5,
+                has_embedding=m.embedding_status == "done",
+            ))
+        return results
 
     def record_usage(self, memory_id: str, execution_id: str, agent_id: str, score: float = 0.0) -> None:
         db_mem = self.db.query(MemoryModel).filter(MemoryModel.id == memory_id).first()

@@ -104,3 +104,118 @@ class MemoryCreateTool(BaseTool):
         svc = MemoryService(context.db)
         mem = await svc.create_memory(mem_in)
         return {"memory_id": mem.id, "status": "created"}
+
+
+class MemoryUpdateTool(BaseTool):
+    name = "memory.update"
+    description = "Update an existing memory entry (title, content, tags, confidence or importance). Use when a stored fact about the user changed."
+    capability = "memory"
+    critical = False
+    source = "core"
+    input_schema = {
+        "memory_id": {"type": "string", "description": "ID of the memory to update"},
+        "title": {"type": "string", "description": "New title", "nullable": True},
+        "content": {"type": "string", "description": "New content", "nullable": True},
+        "tags": {"type": "array", "items": {"type": "string"}, "nullable": True},
+        "confidence": {"type": "number", "nullable": True},
+        "importance": {"type": "number", "nullable": True},
+    }
+    output_schema = {
+        "memory_id": {"type": "string"},
+        "status": {"type": "string"},
+    }
+
+    async def execute(self, arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
+        memory_id = arguments.get("memory_id", "").strip()
+        if not memory_id:
+            raise ToolError("MISSING_ARGUMENT", "memory.update requires 'memory_id'")
+
+        updates: Dict[str, Any] = {}
+        for field in ("title", "content", "tags", "confidence", "importance"):
+            if field in arguments and arguments[field] is not None:
+                updates[field] = arguments[field]
+        if not updates:
+            raise ToolError("MISSING_ARGUMENT", "memory.update requires at least one field to change")
+
+        svc = MemoryService(context.db)
+        mem = await svc.update_memory(memory_id, updates)
+        if mem is None:
+            raise ToolError("NOT_FOUND", f"Memory '{memory_id}' not found")
+        return {"memory_id": mem.id, "status": "updated"}
+
+
+class MemoryDeleteTool(BaseTool):
+    name = "memory.delete"
+    description = "Delete (soft-delete) a memory entry. Use when a stored fact is wrong, obsolete or no longer relevant."
+    capability = "memory"
+    critical = False
+    source = "core"
+    input_schema = {
+        "memory_id": {"type": "string", "description": "ID of the memory to delete"},
+    }
+    output_schema = {
+        "memory_id": {"type": "string"},
+        "status": {"type": "string"},
+    }
+
+    async def execute(self, arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
+        memory_id = arguments.get("memory_id", "").strip()
+        if not memory_id:
+            raise ToolError("MISSING_ARGUMENT", "memory.delete requires 'memory_id'")
+
+        svc = MemoryService(context.db)
+        ok = await svc.delete_memory(memory_id)
+        if not ok:
+            raise ToolError("NOT_FOUND", f"Memory '{memory_id}' not found")
+        return {"memory_id": memory_id, "status": "deleted"}
+
+
+class MemoryListTool(BaseTool):
+    name = "memory.list"
+    description = "List stored memories by scope/type. Useful to find a memory_id before updating or deleting it."
+    capability = "memory"
+    critical = False
+    source = "core"
+    input_schema = {
+        "scope": {"type": "string", "description": "global | agent | team", "nullable": True},
+        "scope_id": {"type": "string", "description": "Agent or team ID", "nullable": True},
+        "type": {"type": "string", "description": "Filter by memory type", "nullable": True},
+        "limit": {"type": "integer", "default": 20},
+    }
+    output_schema = {
+        "results": {"type": "array"},
+        "count": {"type": "integer"},
+    }
+
+    async def execute(self, arguments: Dict[str, Any], context: ToolExecutionContext) -> Dict[str, Any]:
+        scope = arguments.get("scope")
+        if scope:
+            try:
+                MemoryScope(scope)
+            except ValueError:
+                valid = [s.value for s in MemoryScope]
+                raise ToolError("INVALID_ARGUMENT", f"Invalid scope '{scope}'. Valid values: {valid}")
+
+        limit = min(int(arguments.get("limit", 20)), 100)
+        svc = MemoryService(context.db)
+        memories = svc.list_memories(
+            scope=scope,
+            scope_id=arguments.get("scope_id"),
+            type=arguments.get("type"),
+            limit=limit,
+        )
+        results = [
+            {
+                "memory_id": m.id,
+                "scope": getattr(m.scope, "value", m.scope),
+                "scope_id": m.scope_id,
+                "type": getattr(m.type, "value", m.type),
+                "title": m.title,
+                "content": m.content,
+                "tags": m.tags,
+                "importance": m.importance,
+                "confidence": m.confidence,
+            }
+            for m in memories
+        ]
+        return {"results": results, "count": len(results)}

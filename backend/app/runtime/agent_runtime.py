@@ -409,20 +409,29 @@ class AgentRuntime:
                             limit=8,
                         )
                         search_resp = await memory_svc.search(search_req)
-                        memory_context = memory_svc.format_memories_for_prompt(search_resp.results)
+
+                        # Always surface core profile/preference facts, even if
+                        # the current message doesn't match them.
+                        seen_ids = {r.memory_id for r in search_resp.results}
+                        pinned = [
+                            p for p in memory_svc.get_pinned_results(scopes, limit=3)
+                            if p.memory_id not in seen_ids
+                        ]
+                        recalled = search_resp.results + pinned
+                        memory_context = memory_svc.format_memories_for_prompt(recalled)
 
                         yield self._make_event(
                             execution_id, EventType.MEMORY_LOOKUP_RESULT, "runtime", agent_id,
-                            {"count": len(search_resp.results), "has_context": bool(memory_context)}
+                            {"count": len(recalled), "has_context": bool(memory_context)}
                         )
 
-                        for result in search_resp.results:
+                        for result in recalled:
                             memory_svc.record_usage(result.memory_id, execution_id, agent_id, result.score)
 
-                        if search_resp.results:
+                        if recalled:
                             yield self._make_event(
                                 execution_id, EventType.MEMORY_USAGE_RECORDED, "runtime", agent_id,
-                                {"memory_ids": [r.memory_id for r in search_resp.results]}
+                                {"memory_ids": [r.memory_id for r in recalled]}
                             )
                 except Exception:
                     pass  # Memory failure must never crash execution
