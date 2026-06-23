@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import type { ToolCallView, ToolCallStatus } from '../../lib/groupEvents'
 
+const TOOL_ICONS: Record<string, string> = {
+  'screen.perceive': '📸',
+  'screen.click': '🖱️',
+  'screen.type': '⌨️',
+  'screen.key': '⌨️',
+  'screen.scroll': '⤡',
+}
+
 const STATUS_STYLE: Record<ToolCallStatus, string> = {
   requested: 'border-purple-500/30 text-purple-300',
   validated: 'border-purple-500/30 text-purple-300',
@@ -21,6 +29,23 @@ const STATUS_ICON: Record<ToolCallStatus, string> = {
 function argHint(call: ToolCallView): string | undefined {
   const a = call.args
   if (!a) return undefined
+  // Screen tool-specific hints
+  if (call.tool === 'screen.click') {
+    if (a.element_id != null) return `elem ${a.element_id}`
+    if (a.x != null && a.y != null) return `(${a.x}, ${a.y})`
+    return undefined
+  }
+  if (call.tool === 'screen.type') {
+    const t = (a.text as string | undefined) ?? ''
+    return t.length > 44 ? t.slice(0, 42) + '…' : t || undefined
+  }
+  if (call.tool === 'screen.key') return (a.combo as string | undefined) ?? undefined
+  if (call.tool === 'screen.scroll') {
+    const dx = a.dx as number | undefined
+    const dy = a.dy as number | undefined
+    if (dx != null || dy != null) return `dx=${dx ?? 0} dy=${dy ?? 0}`
+    return undefined
+  }
   const raw = (a.path ?? a.source_path ?? a.url ?? a.command ?? a.target_agent_id) as
     | string
     | undefined
@@ -44,7 +69,7 @@ export function ToolCallCard({ call }: { call: ToolCallView }) {
         disabled={!hasDetail}
       >
         <span className="flex items-center gap-2 min-w-0">
-          <span>🔧</span>
+          <span>{TOOL_ICONS[call.tool] ?? '🔧'}</span>
           <span className="font-mono shrink-0">{call.tool}</span>
           {hint && <span className="font-mono text-slate-500 truncate">{hint}</span>}
           <span aria-label={call.status} className="shrink-0">{STATUS_ICON[call.status]}</span>

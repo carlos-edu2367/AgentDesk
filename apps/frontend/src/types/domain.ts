@@ -136,6 +136,8 @@ export interface ModelConfig {
   context_window: number
   max_tokens: number
   stream: boolean
+  vision_provider_id?: string
+  vision_model?: string
 }
 
 export interface MemoryConfig {
@@ -411,6 +413,8 @@ export interface Conversation {
   title: string
   workspace_ids: string[]
   max_steps?: number | null
+  computer_use_enabled?: boolean
+  computer_use_display?: number
   created_at: string
   updated_at: string
 }
@@ -419,6 +423,8 @@ export interface ConversationUpdate {
   title?: string
   workspace_ids?: string[]
   max_steps?: number | null
+  computer_use_enabled?: boolean
+  computer_use_display?: number
 }
 
 export interface ConversationTurn {

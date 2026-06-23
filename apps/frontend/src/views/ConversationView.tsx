@@ -57,6 +57,9 @@ export function ConversationView() {
   // input can be cleared; coerced to a number/null when persisted and sent.
   const [maxStepsInput, setMaxStepsInput] = useState('')
 
+  // Computer-use flag for this chat. Requires the agent to have the computer_use capability.
+  const [computerUseEnabled, setComputerUseEnabled] = useState(false)
+
   // Workspaces granted to this chat (so file/terminal tools can run).
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspaceIds, setWorkspaceIds] = useState<string[]>([])
@@ -80,6 +83,7 @@ export function ConversationView() {
       setDetail(d)
       setWorkspaceIds(d.conversation.workspace_ids ?? [])
       setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
+      setComputerUseEnabled(d.conversation.computer_use_enabled ?? false)
     }
   }
 
@@ -97,6 +101,7 @@ export function ConversationView() {
         setDetail(d)
         setWorkspaceIds(d.conversation.workspace_ids ?? [])
         setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
+        setComputerUseEnabled(d.conversation.computer_use_enabled ?? false)
         // If the latest turn is still in flight, reconnect its live stream. The
         // backend has been working (or waiting on approval) the whole time the
         // chat was closed; this resumes streaming instead of showing it frozen.
@@ -220,6 +225,19 @@ export function ConversationView() {
       await conversationsApi.update(id, { max_steps: value })
       setDetail(d => (d ? { ...d, conversation: { ...d.conversation, max_steps: value } } : d))
     } catch (err) {
+      setError(String(err))
+    }
+  }
+
+  const toggleComputerUse = async () => {
+    if (!id) return
+    const next = !computerUseEnabled
+    setComputerUseEnabled(next)
+    try {
+      await conversationsApi.update(id, { computer_use_enabled: next })
+      setDetail(d => d ? { ...d, conversation: { ...d.conversation, computer_use_enabled: next } } : d)
+    } catch (err) {
+      setComputerUseEnabled(!next)
       setError(String(err))
     }
   }
@@ -391,6 +409,18 @@ export function ConversationView() {
                   onBlur={persistMaxSteps}
                   title="Max runtime steps for this chat. Leave blank to use the default."
                 />
+              </label>
+              <label
+                className="inline-flex select-none items-center gap-2"
+                title="Enables screen.perceive / screen.click / screen.type tools. Requires computer_use capability on the agent."
+              >
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-600 bg-slate-900"
+                  checked={computerUseEnabled}
+                  onChange={toggleComputerUse}
+                />
+                Computer Use
               </label>
             </div>
             <textarea

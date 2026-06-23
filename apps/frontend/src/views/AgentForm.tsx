@@ -62,6 +62,8 @@ export function AgentForm() {
   const [capabilityInfos, setCapabilityInfos] = useState<CapabilityInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
+  const [visionModels, setVisionModels] = useState<ModelInfo[]>([])
+  const [loadingVisionModels, setLoadingVisionModels] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,6 +123,15 @@ export function AgentForm() {
       .catch(() => setModels([]))
       .finally(() => setLoadingModels(false))
   }, [modelConfig.provider_id])
+
+  useEffect(() => {
+    if (!modelConfig.vision_provider_id) { setVisionModels([]); return }
+    setLoadingVisionModels(true)
+    providersApi.models(modelConfig.vision_provider_id)
+      .then(setVisionModels)
+      .catch(() => setVisionModels([]))
+      .finally(() => setLoadingVisionModels(false))
+  }, [modelConfig.vision_provider_id])
 
   // Capability options: backend list (authoritative) merged with plugin/MCP-derived ones.
   const capabilityOptions = useMemo(() => {
@@ -378,6 +389,61 @@ export function AgentForm() {
                 />
                 <span className="text-sm text-slate-300">Enable streaming</span>
               </label>
+
+              {/* Vision model — optional dedicated model for computer-use screenshot turns */}
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <p className="text-xs text-slate-400">
+                  Vision model (optional) — used for computer-use screenshot turns when the main model doesn't support images.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="form-label" htmlFor="vision-provider">Vision Provider</label>
+                    <select
+                      id="vision-provider"
+                      className="form-select"
+                      value={modelConfig.vision_provider_id ?? ''}
+                      onChange={e => setModelConfig(prev => ({
+                        ...prev,
+                        vision_provider_id: e.target.value || undefined,
+                        vision_model: undefined,
+                      }))}
+                    >
+                      <option value="">— same as main model —</option>
+                      {providers.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+                      ))}
+                    </select>
+                  </div>
+                  {modelConfig.vision_provider_id && (
+                    <div>
+                      <label className="form-label" htmlFor="vision-model">Vision Model</label>
+                      {loadingVisionModels ? (
+                        <p className="text-slate-500 text-sm py-2">Loading models…</p>
+                      ) : visionModels.length > 0 ? (
+                        <select
+                          id="vision-model"
+                          className="form-select"
+                          value={modelConfig.vision_model ?? ''}
+                          onChange={e => setModelConfig(prev => ({ ...prev, vision_model: e.target.value || undefined }))}
+                        >
+                          <option value="">Select a model…</option>
+                          {visionModels.map(m => (
+                            <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          id="vision-model"
+                          className="form-input"
+                          value={modelConfig.vision_model ?? ''}
+                          onChange={e => setModelConfig(prev => ({ ...prev, vision_model: e.target.value || undefined }))}
+                          placeholder="e.g. gemma3:4b or qwen2.5vl:7b"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </section>
