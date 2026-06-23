@@ -35,6 +35,8 @@ describe('Skills page', () => {
       expect(screen.getByText('Report Writer')).toBeInTheDocument()
       expect(screen.getByText('Use summary and findings.')).toBeInTheDocument()
     })
+    expect(screen.getByPlaceholderText('Search skills by name, tag, purpose, or ID')).toBeInTheDocument()
+    expect(screen.queryByText('Import / Export JSON')).not.toBeInTheDocument()
   })
 
   it('creates a skill through the form', async () => {
@@ -42,6 +44,8 @@ describe('Skills page', () => {
     await waitFor(() => expect(screen.getByText('Report Writer')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: 'New Skill' }))
+    expect(screen.getByPlaceholderText('Technical Code Reviewer')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Write concrete instructions the agent should follow.')).toBeInTheDocument()
     await userEvent.type(screen.getByLabelText('Name'), 'Reviewer')
     await userEvent.type(screen.getByLabelText('ID'), 'skill_reviewer')
     await userEvent.type(screen.getByLabelText('Version'), '0.1.0')
@@ -56,5 +60,16 @@ describe('Skills page', () => {
         prompt: 'Review for risks.',
       }))
     })
+  })
+
+  it('keeps JSON import collapsed until requested', async () => {
+    render(<MemoryRouter><Skills /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByText('Report Writer')).toBeInTheDocument())
+
+    expect(screen.queryByPlaceholderText('Paste exported skill JSON here')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Import JSON' }))
+
+    expect(screen.getByPlaceholderText('Paste exported skill JSON here')).toBeInTheDocument()
   })
 })

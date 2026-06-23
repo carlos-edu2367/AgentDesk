@@ -22,6 +22,7 @@ export function Skills() {
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<SkillCreate>(EMPTY_FORM)
   const [examplesText, setExamplesText] = useState('[]')
@@ -54,11 +55,18 @@ export function Skills() {
     )
   }, [query, skills])
 
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    skills.forEach(skill => skill.tags.forEach(tag => tagSet.add(tag)))
+    return Array.from(tagSet).sort()
+  }, [skills])
+
   const startCreate = () => {
     setEditingId(null)
     setForm(EMPTY_FORM)
     setExamplesText('[]')
     setShowForm(true)
+    setShowImport(false)
   }
 
   const startEdit = (skill: Skill) => {
@@ -74,6 +82,7 @@ export function Skills() {
     })
     setExamplesText(JSON.stringify(skill.examples ?? [], null, 2))
     setShowForm(true)
+    setShowImport(false)
   }
 
   const handleSave = async (event: React.FormEvent) => {
@@ -121,6 +130,7 @@ export function Skills() {
       const parsed = JSON.parse(importText)
       await skillsApi.importSkill(parsed, overwriteImport)
       setImportText('')
+      setShowImport(false)
       await load()
     } catch (e) {
       setError(String(e))
@@ -130,6 +140,8 @@ export function Skills() {
   const handleExport = async (skill: Skill) => {
     const exported = await skillsApi.exportSkill(skill.id)
     setImportText(JSON.stringify(exported, null, 2))
+    setShowImport(true)
+    setShowForm(false)
   }
 
   if (loading) return <LoadingState message="Loading skills..." />
@@ -140,7 +152,14 @@ export function Skills() {
       <TopBar
         title="Skills"
         description={`${skills.length} prompt-based skills`}
-        actions={<button className="btn-primary" onClick={startCreate}>New Skill</button>}
+        actions={(
+          <>
+            <button className="btn-secondary" onClick={() => { setShowImport(current => !current); setShowForm(false) }}>
+              Import JSON
+            </button>
+            <button className="btn-primary" onClick={startCreate}>New Skill</button>
+          </>
+        )}
       />
 
       <div className="space-y-4">
@@ -150,32 +169,60 @@ export function Skills() {
           </div>
         )}
 
-        <div className="card">
-          <p className="mb-3 text-sm text-slate-300">
-            Skills alteram o comportamento do agente, mas não executam código.
-          </p>
+        <div className="card space-y-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-100">Skills are prompt instructions, not executable code.</p>
+              <p className="mt-1 text-xs text-slate-500">Use them to make agents consistent in writing, research, planning, debugging, and review tasks.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <LibraryStat value={String(skills.length)} label="skills" />
+              <LibraryStat value={String(allTags.length)} label="tags" />
+            </div>
+          </div>
           <input
             className="form-input"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            placeholder="Search by name, tag, description, or ID..."
+            placeholder="Search skills by name, tag, purpose, or ID"
           />
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {allTags.slice(0, 10).map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  className="rounded-md border border-slate-800 bg-slate-950/40 px-2 py-1 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                  onClick={() => setQuery(tag)}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {showForm && (
           <form onSubmit={handleSave} className="card space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-slate-100">{editingId ? 'Edit skill' : 'Create skill'}</h2>
+                <p className="mt-1 text-sm text-slate-500">Keep the prompt direct. The runtime enforces skill size limits before injection.</p>
+              </div>
+              <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>Close</button>
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <label className="form-label" htmlFor="skill-name">Name</label>
-                <input id="skill-name" className="form-input" value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} required />
+                <input id="skill-name" className="form-input" value={form.name} onChange={event => setForm(current => ({ ...current, name: event.target.value }))} placeholder="Technical Code Reviewer" required />
               </div>
               <div>
                 <label className="form-label" htmlFor="skill-id">ID</label>
-                <input id="skill-id" className="form-input font-mono" value={form.id} onChange={event => setForm(current => ({ ...current, id: event.target.value }))} disabled={Boolean(editingId)} required />
+                <input id="skill-id" className="form-input font-mono" value={form.id} onChange={event => setForm(current => ({ ...current, id: event.target.value }))} placeholder="skill_code_review" disabled={Boolean(editingId)} required />
               </div>
               <div>
                 <label className="form-label" htmlFor="skill-version">Version</label>
-                <input id="skill-version" className="form-input" value={form.version} onChange={event => setForm(current => ({ ...current, version: event.target.value }))} required />
+                <input id="skill-version" className="form-input" value={form.version} onChange={event => setForm(current => ({ ...current, version: event.target.value }))} placeholder="0.1.0" required />
               </div>
               <div>
                 <label className="form-label" htmlFor="skill-tags">Tags</label>
@@ -187,19 +234,20 @@ export function Skills() {
                     ...current,
                     tags: event.target.value.split(',').map(tag => tag.trim()).filter(Boolean),
                   }))}
+                  placeholder="development, review, safety"
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="form-label" htmlFor="skill-description">Description</label>
-                <input id="skill-description" className="form-input" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} required />
+                <input id="skill-description" className="form-input" value={form.description} onChange={event => setForm(current => ({ ...current, description: event.target.value }))} placeholder="Reviews code changes for risks, regressions, and missing tests." required />
               </div>
               <div className="md:col-span-2">
                 <label className="form-label" htmlFor="skill-prompt">Prompt</label>
-                <textarea id="skill-prompt" className="form-textarea min-h-[180px]" value={form.prompt} onChange={event => setForm(current => ({ ...current, prompt: event.target.value }))} required />
+                <textarea id="skill-prompt" className="form-textarea min-h-[180px]" value={form.prompt} onChange={event => setForm(current => ({ ...current, prompt: event.target.value }))} placeholder="Write concrete instructions the agent should follow." required />
               </div>
               <div className="md:col-span-2">
                 <label className="form-label" htmlFor="skill-examples">Examples</label>
-                <textarea id="skill-examples" className="form-textarea min-h-[90px] font-mono text-xs" value={examplesText} onChange={event => setExamplesText(event.target.value)} />
+                <textarea id="skill-examples" className="form-textarea min-h-[90px] font-mono text-xs" value={examplesText} onChange={event => setExamplesText(event.target.value)} placeholder='[{"input":"Review this diff","behavior":"Lead with risks and missing tests."}]' />
               </div>
             </div>
             <div className="flex justify-end gap-2">
@@ -211,24 +259,32 @@ export function Skills() {
           </form>
         )}
 
-        <div className="card space-y-3">
-          <p className="text-sm font-semibold text-slate-200">Import / Export JSON</p>
-          <textarea
-            className="form-textarea min-h-[110px] font-mono text-xs"
-            value={importText}
-            onChange={event => setImportText(event.target.value)}
-            placeholder='{"id":"skill_report_writer","name":"...","version":"0.1.0","description":"...","prompt":"..."}'
-          />
-          <div className="flex items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input type="checkbox" checked={overwriteImport} onChange={event => setOverwriteImport(event.target.checked)} />
-              <span>Overwrite existing skill</span>
-            </label>
-            <button className="btn-secondary" onClick={handleImport} disabled={!importText.trim()}>
-              Import JSON
-            </button>
+        {showImport && (
+          <div className="card space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-200">Import / Export JSON</p>
+                <p className="mt-1 text-xs text-slate-500">Export fills this box. Import expects the same skill JSON shape used by the API.</p>
+              </div>
+              <button className="btn-ghost" onClick={() => setShowImport(false)}>Close</button>
+            </div>
+            <textarea
+              className="form-textarea min-h-[110px] font-mono text-xs"
+              value={importText}
+              onChange={event => setImportText(event.target.value)}
+              placeholder="Paste exported skill JSON here"
+            />
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <label className="flex items-center gap-2 text-sm text-slate-300">
+                <input type="checkbox" checked={overwriteImport} onChange={event => setOverwriteImport(event.target.checked)} />
+                <span>Overwrite existing skill</span>
+              </label>
+              <button className="btn-secondary" onClick={handleImport} disabled={!importText.trim()}>
+                Import JSON
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {filteredSkills.length === 0 ? (
           <EmptyState
@@ -237,7 +293,7 @@ export function Skills() {
             action={<button className="btn-primary" onClick={startCreate}>Create Skill</button>}
           />
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-3 xl:grid-cols-2">
             {filteredSkills.map(skill => (
               <SkillCard
                 key={skill.id}
@@ -254,6 +310,15 @@ export function Skills() {
   )
 }
 
+function LibraryStat({ value, label }: { value: string; label: string }) {
+  return (
+    <span className="rounded-md border border-slate-800 bg-slate-950/40 px-3 py-2 text-center">
+      <span className="block text-sm font-semibold text-slate-100">{value}</span>
+      <span className="text-slate-500">{label}</span>
+    </span>
+  )
+}
+
 function SkillCard({
   skill,
   onEdit,
@@ -267,16 +332,14 @@ function SkillCard({
 }) {
   return (
     <div className="card">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex h-full flex-col gap-4">
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <p className="font-medium text-slate-100">{skill.name}</p>
-            <span className="font-mono text-xs text-slate-500">{skill.id}</span>
-            <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-xs text-blue-300">
-              v{skill.version}
-            </span>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <p className="text-base font-semibold text-slate-100">{skill.name}</p>
+            <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-300">v{skill.version}</span>
           </div>
-          <p className="text-sm text-slate-400">{skill.description}</p>
+          <p className="break-all font-mono text-xs text-slate-500">{skill.id}</p>
+          <p className="mt-2 text-sm text-slate-400">{skill.description}</p>
           {skill.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {skill.tags.map(tag => (
@@ -290,7 +353,7 @@ function SkillCard({
             {skill.prompt}
           </pre>
         </div>
-        <div className="flex shrink-0 flex-col gap-2">
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-800 pt-3">
           <button className="btn-secondary text-xs" onClick={onEdit}>Edit</button>
           <button className="btn-secondary text-xs" onClick={onExport}>Export</button>
           <button className="btn-danger text-xs" onClick={onDelete}>Delete</button>

@@ -87,3 +87,27 @@ def _ensure_config_file(path: Path, default_data: Dict[str, Any]):
 
 def get_db_path() -> Path:
     return get_appdata_dir() / "database" / "agentdesk.sqlite"
+
+
+DEFAULT_EMBEDDING_CONFIG: Dict[str, str] = {
+    "type": "ollama",
+    "model": "nomic-embed-text",
+    "base_url": "http://localhost:11434",
+}
+
+
+def get_embedding_config() -> Dict[str, str]:
+    """Reads the configured embedding provider from providers.config.json,
+    falling back to the Ollama nomic-embed-text default when unset/unreadable."""
+    path = get_appdata_dir() / "config" / "providers.config.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        ep = data.get("embedding_provider") or {}
+        return {
+            "type": ep.get("type") or DEFAULT_EMBEDDING_CONFIG["type"],
+            "model": ep.get("model") or DEFAULT_EMBEDDING_CONFIG["model"],
+            "base_url": ep.get("base_url") or DEFAULT_EMBEDDING_CONFIG["base_url"],
+        }
+    except (OSError, ValueError, json.JSONDecodeError):
+        return dict(DEFAULT_EMBEDDING_CONFIG)

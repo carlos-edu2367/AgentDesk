@@ -1,24 +1,4 @@
-INFO:     Will watch for changes in these directories: ['C:\\Users\\Carlos\\Documents\\Carlos Eduardo\\agentes\\AgentDesk\\backend']
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [25836] using WatchFiles
-INFO:     Started server process [708]
-INFO:     Waiting for application startup.
-INFO:agentdesk.startup:AppData structure verified/created.
-INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
-INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
-WARNING:  WatchFiles detected changes in 'app\domain\enums.py'. Reloading...
-WARNING:  WatchFiles detected changes in 'app\providers\schemas.py', 'tests\test_runtime_tool_call_parsing.py', 'app\runtime\agent_runtime.py', 'app\domain\schemas.py'. Reloading...
-INFO:     Started server process [30512]
-INFO:     Waiting for application startup.
-INFO:agentdesk.startup:AppData structure verified/created.
-INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
-INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
-WARNING:  WatchFiles detected changes in 'tests\test_runtime_tool_call_parsing.py'. Reloading...
-WARNING:  WatchFiles detected changes in 'app\runtime\parser.py'. Reloading...
-C:\Users\Carlos\AppData\Roaming\Python\Python313\site-packages\uvicorn\_subprocess.py:84: RuntimeWarning: coroutine 'Server.serve' was never awaited
-  pass
-RuntimeWarning: Enable tracemalloc to get the object allocation traceback
-INFO:     Started server process [7028]
+INFO:     Started server process [19188]
 INFO:     Waiting for application startup.
 INFO:agentdesk.startup:AppData structure verified/created.
 INFO  [alembic.runtime.migration] Context impl SQLiteImpl.

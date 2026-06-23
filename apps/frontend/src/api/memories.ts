@@ -41,6 +41,17 @@ export const memoriesApi = {
   search: (request: MemorySearchRequest) =>
     api.post<MemorySearchResponse>('/api/memories/search', request),
 
+  reembed: (params?: { scope?: string; scope_id?: string }) => {
+    const qs = new URLSearchParams()
+    if (params?.scope) qs.set('scope', params.scope)
+    if (params?.scope_id) qs.set('scope_id', params.scope_id)
+    const query = qs.toString()
+    return api.post<{ processed: number; succeeded: number; failed: number }>(
+      `/api/memories/reembed${query ? `?${query}` : ''}`,
+      {},
+    )
+  },
+
   createLink: (memoryId: string, link: MemoryLinkCreate) =>
     api.post<{ id: string }>(`/api/memories/${memoryId}/links`, link),
 

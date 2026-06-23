@@ -53,7 +53,14 @@ export function Memory() {
   const [searchMode, setSearchMode] = useState<'text' | 'semantic' | 'hybrid'>('hybrid')
   const [searchResults, setSearchResults] = useState<MemorySearchResult[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [reembedding, setReembedding] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<MemoryCreate>>(initialForm)
+
+  const failedCount = useMemo(
+    () => memories.filter(m => m.embedding_status === 'failed' || m.embedding_status === 'pending').length,
+    [memories],
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -135,6 +142,25 @@ export function Memory() {
     }
   }
 
+  const handleReembed = async () => {
+    setReembedding(true)
+    setNotice(null)
+    try {
+      const res = await memoriesApi.reembed(filterScope ? { scope: filterScope } : undefined)
+      setNotice(
+        res.processed === 0
+          ? 'No memories needed re-embedding.'
+          : `Re-embedded ${res.succeeded}/${res.processed} memories${res.failed ? ` (${res.failed} still failing — is the embedding model available?)` : ''}.`,
+      )
+      setSearchResults(null)
+      await load()
+    } catch {
+      setNotice('Re-embed failed. Is the backend / embedding provider running?')
+    } finally {
+      setReembedding(false)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this memory?')) return
 
@@ -156,13 +182,29 @@ export function Memory() {
         title="Memory"
         description={`${memories.length} memories`}
         actions={
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            New Memory
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="btn-ghost"
+              onClick={handleReembed}
+              disabled={reembedding}
+              title="Regenerate embeddings for memories whose embedding failed or is pending"
+            >
+              {reembedding ? 'Re-embedding…' : `Re-embed${failedCount > 0 ? ` (${failedCount})` : ''}`}
+            </button>
+            <button className="btn-primary" onClick={() => setShowForm(true)}>
+              New Memory
+            </button>
+          </div>
         }
       />
 
       <div className="space-y-4">
+        {notice && (
+          <div className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-200">
+            {notice}
+          </div>
+        )}
+
         <div className="card">
           <div className="flex flex-wrap items-end gap-2">
             <select

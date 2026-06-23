@@ -55,14 +55,19 @@ describe('MCP Servers page', () => {
     await waitFor(() => {
       expect(screen.getByText('Filesystem MCP')).toBeInTheDocument()
       expect(screen.getByText('mcp.filesystem.echo')).toBeInTheDocument()
-      expect(screen.getByText('MCP servers executam processos locais. Cadastre apenas servidores confiaveis.')).toBeInTheDocument()
+      expect(screen.getByText('MCP servers run local processes. Test before assigning them to agents.')).toBeInTheDocument()
     })
+    expect(screen.queryByLabelText('Command')).not.toBeInTheDocument()
   })
 
   it('creates an MCP server from the form', async () => {
     render(<MemoryRouter><McpServers /></MemoryRouter>)
 
-    await userEvent.type(await screen.findByLabelText('ID'), 'memory')
+    await userEvent.click(await screen.findByRole('button', { name: 'Add MCP server' }))
+    expect(screen.getByPlaceholderText('python')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('examples/mcp/mock-mcp-server.py')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('ID'), 'memory')
     await userEvent.type(screen.getByLabelText('Name'), 'Memory MCP')
     await userEvent.type(screen.getByLabelText('Command'), 'python')
     await userEvent.type(screen.getByLabelText('Args'), 'mock_mcp_server.py')

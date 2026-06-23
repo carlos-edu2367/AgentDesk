@@ -39,6 +39,17 @@ async def search_memories(request: MemorySearchRequest, db: Session = Depends(ge
     return await svc.search(request)
 
 
+@router.post("/reembed")
+async def reembed_memories(
+    scope: Optional[str] = Query(None),
+    scope_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Backfill embeddings for memories whose embedding failed or is pending."""
+    svc = MemoryService(db)
+    return await svc.reembed_failed(scope=scope, scope_id=scope_id)
+
+
 @router.get("/{memory_id}", response_model=Memory)
 def get_memory(memory_id: str, db: Session = Depends(get_db)):
     svc = MemoryService(db)

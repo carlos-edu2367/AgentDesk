@@ -14,6 +14,7 @@ from app.memory.embeddings import (
     EMBEDDING_MODEL, DEFAULT_OLLAMA_URL,
     get_embedding_for_memory, vector_to_json,
 )
+from app.storage.appdata import get_embedding_config
 from app.domain.schemas import MemorySearchResult
 from app.memory.search import search_text, search_semantic, search_hybrid, _apply_scope_filter
 
@@ -31,12 +32,15 @@ class MemoryService:
     def __init__(
         self,
         db: Session,
-        ollama_url: str = DEFAULT_OLLAMA_URL,
-        embedding_model: str = EMBEDDING_MODEL,
+        ollama_url: Optional[str] = None,
+        embedding_model: Optional[str] = None,
     ):
         self.db = db
-        self.ollama_url = ollama_url
-        self.embedding_model = embedding_model
+        # Honor the embedding provider configured in providers.config.json; explicit
+        # args still win (used by tests and callers that override).
+        cfg = get_embedding_config()
+        self.ollama_url = ollama_url if ollama_url is not None else cfg["base_url"]
+        self.embedding_model = embedding_model if embedding_model is not None else cfg["model"]
 
     def _db_to_schema(self, db_mem: MemoryModel) -> Memory:
         tags = db_mem.tags if isinstance(db_mem.tags, list) else (json.loads(db_mem.tags) if db_mem.tags else [])
@@ -138,6 +142,32 @@ class MemoryService:
 
         self.db.refresh(db_mem)
         return self._db_to_schema(db_mem)
+
+    async def reembed_failed(
+        self, scope: Optional[str] = None, scope_id: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """Regenerates embeddings for all memories whose embedding is missing
+        (status failed/pending). Used to backfill after the embedding provider
+        becomes available, instead of editing each memory by hand."""
+        q = self.db.query(MemoryModel).filter(
+            MemoryModel.deleted_at == None,
+            MemoryModel.embedding_status.in_(["failed", "pending"]),
+        )
+        if scope:
+            q = q.filter(MemoryModel.scope == scope)
+        if scope_id is not None:
+            q = q.filter(MemoryModel.scope_id == scope_id)
+
+        rows = q.all()
+        succeeded = 0
+        for m in rows:
+            if await self._generate_and_store_embedding(m.id, f"{m.title} {m.content}"):
+                succeeded += 1
+        return {
+            "processed": len(rows),
+            "succeeded": succeeded,
+            "failed": len(rows) - succeeded,
+        }
 
     async def delete_memory(self, memory_id: str) -> bool:
         db_mem = self.db.query(MemoryModel).filter(MemoryModel.id == memory_id).first()
