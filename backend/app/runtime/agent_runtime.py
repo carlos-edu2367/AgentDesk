@@ -10,6 +10,7 @@ from app.domain.enums import EventType, ApprovalStatus, ApprovalMode
 from app.domain.utils import generate_id
 from app.domain.utils import mask_secrets, sanitize_for_output
 from app.providers import provider_registry, ChatRequest, ChatMessage, ProviderError
+from app.providers.schemas import ImagePart
 from app.tools.base import ToolExecutionContext
 from app.tools.capabilities import CRITICAL_TOOLS, get_risk_level, get_tool_summary
 from app.tools.errors import ToolError, ToolNotFoundError, ToolDeniedError
@@ -63,6 +64,30 @@ def _compact_tool_result_for_model(result: Any) -> Any:
         "truncated_for_model": True,
         "original_result_chars": len(encoded),
     }
+
+
+def build_messages_with_vision(history: list) -> list:
+    """
+    Convert the raw history list to ChatMessage objects, attaching the
+    screenshot image ONLY to the last perceive step.  All older screenshots
+    are dropped to avoid unbounded context growth.
+    """
+    last_img_idx = None
+    for i, m in enumerate(history):
+        if m.get("screenshot_b64"):
+            last_img_idx = i
+
+    msgs = []
+    for i, m in enumerate(history):
+        images = []
+        if i == last_img_idx:
+            images = [ImagePart(base64=m["screenshot_b64"])]
+        msgs.append(ChatMessage(
+            role=m["role"],
+            content=m.get("content", ""),
+            images=images,
+        ))
+    return msgs
 
 
 class AgentRuntime:
