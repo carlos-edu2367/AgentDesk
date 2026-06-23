@@ -39,6 +39,35 @@ describe('groupTurnEvents', () => {
     expect(view.thinking).toBe('let me think')
   })
 
+  it('strips xml-wrapped tool calls from thinking', () => {
+    const view = groupTurnEvents([
+      ev({
+        type: 'model_reasoning_chunk',
+        content: {
+          delta:
+            'Vou ler os arquivos.<tool_calls>{"calls":[{"id":"read","tool":"filesystem.read","arguments":{"path":"a.js"}}]}</code></pre>',
+        },
+      }),
+    ])
+
+    expect(view.thinking).toBe('Vou ler os arquivos.')
+  })
+
+  it('strips xml-wrapped tool calls from completed final answers', () => {
+    const view = groupTurnEvents([
+      ev({
+        type: 'agent_completed',
+        content: {
+          result:
+            'Vamos ler o estado atual.<tool_calls>{"calls":[{"id":"read","tool":"filesystem.read","arguments":{"path":"a.js"}}]}</code></pre>',
+        },
+      }),
+    ])
+
+    expect(view.answer).toBe('Vamos ler o estado atual.')
+    expect(view.finalAnswer).toBe('Vamos ler o estado atual.')
+  })
+
   it('groups a tool call lifecycle into one tool card', () => {
     const view = groupTurnEvents([
       ev({ id: 't1', type: 'tool_call_requested', content: { tool: 'read_file', arguments: { path: 'a.txt' } } }),
@@ -213,6 +242,22 @@ describe('stripProtocolJson', () => {
     expect(
       stripProtocolJson('{"tool":"filesystem.read","arguments":{"path":"a.js"}}done'),
     ).toBe('done')
+  })
+
+  it('drops xml-wrapped tool calls from streamed narration', () => {
+    expect(
+      stripProtocolJson(
+        'Vou ler os arquivos.<tool_calls>{"calls":[{"id":"read_index","tool":"filesystem.read","arguments":{"path":"index.html"}}]}</tool_calls>',
+      ),
+    ).toBe('Vou ler os arquivos.')
+  })
+
+  it('drops xml-wrapped tool calls with html code-block closing tags', () => {
+    expect(
+      stripProtocolJson(
+        'Vou ler os arquivos.<tool_calls>{"calls":[{"id":"read_index","tool":"filesystem.read","arguments":{"path":"index.html"}}]}</code></pre>',
+      ),
+    ).toBe('Vou ler os arquivos.')
   })
 })
 

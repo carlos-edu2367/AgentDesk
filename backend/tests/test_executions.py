@@ -125,7 +125,9 @@ def test_execution_sse(setup_data, test_db):
                 events_received.append(event_data["type"])
                 
     assert "execution_started" in events_received
-    assert "model_chunk" in events_received
+    # The SSE replay intentionally skips persisted model_chunk/model_reasoning_chunk
+    # deltas after a run is already finished; they are only useful while live.
+    assert "model_completed" in events_received
     assert "execution_completed" in events_received
 
 def test_execution_unknown_tool_denied(setup_data, test_db):

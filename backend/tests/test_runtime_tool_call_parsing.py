@@ -121,6 +121,74 @@ def test_parser_accepts_tool_calls_batch():
     assert parsed.arguments == {"url": "https://example.com/a"}
 
 
+def test_parser_accepts_xml_wrapped_tool_calls_batch():
+    raw = """
+    <tool_calls>
+    {
+      "calls": [
+        {
+          "id": "read_index_html",
+          "tool": "filesystem.read",
+          "arguments": {"path": "C:/Users/Carlos/tests/index.html"}
+        },
+        {
+          "id": "read_cards_js",
+          "tool": "filesystem.read",
+          "arguments": {"path": "C:/Users/Carlos/tests/src/data/cards.js"}
+        }
+      ]
+    }
+    </tool_calls>
+    """
+
+    parsed = OutputParser().parse(raw)
+
+    assert parsed.is_tool_call
+    assert parsed.is_batch
+    assert parsed.tool_calls == [
+        {
+            "id": "read_index_html",
+            "tool": "filesystem.read",
+            "arguments": {"path": "C:/Users/Carlos/tests/index.html"},
+        },
+        {
+            "id": "read_cards_js",
+            "tool": "filesystem.read",
+            "arguments": {"path": "C:/Users/Carlos/tests/src/data/cards.js"},
+        },
+    ]
+
+
+def test_parser_accepts_xml_tool_calls_with_code_block_trailing_tags():
+    raw = """
+    Vamos ler o estado atual de todos os arquivos.
+
+    <tool_calls>
+    {
+      "calls": [
+        {
+          "id": "read_cards_js",
+          "tool": "filesystem.read",
+          "arguments": {"path": "C:/Users/Carlos/tests/src/data/cards.js"}
+        }
+      ]
+    }
+    </code></pre>
+    """
+
+    parsed = OutputParser().parse(raw)
+
+    assert parsed.is_tool_call
+    assert parsed.is_batch
+    assert parsed.tool_calls == [
+        {
+            "id": "read_cards_js",
+            "tool": "filesystem.read",
+            "arguments": {"path": "C:/Users/Carlos/tests/src/data/cards.js"},
+        },
+    ]
+
+
 @pytest.mark.asyncio
 async def test_runtime_surfaces_truncation_and_gives_up_instead_of_looping():
     """When the model keeps emitting tool calls cut off by max_tokens, the runtime

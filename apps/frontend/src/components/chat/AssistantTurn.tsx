@@ -1,5 +1,5 @@
 import type { ExecutionEvent } from '../../types/domain'
-import { groupTurnEvents, groupTeamEvents } from '../../lib/groupEvents'
+import { groupTurnEvents, groupTeamEvents, stripProtocolJson } from '../../lib/groupEvents'
 import { Markdown } from './Markdown'
 import { ThinkingBlock } from './ThinkingBlock'
 import { ToolCallCard } from './ToolCallChain'
@@ -25,6 +25,7 @@ export function AssistantTurn({
 }) {
   const view = groupTurnEvents(events)
   const teamMembers = groupTeamEvents(events)
+  const cleanFallback = stripProtocolJson(fallbackResult || '')
   // When the turn used tools, render its narration and tool calls inline in
   // stream order (Claude-style). The bottom answer is then the clean parsed
   // final answer only — the narration already shows in the segments, so reusing
@@ -32,8 +33,8 @@ export function AssistantTurn({
   // duplicate it. No-tool turns keep the original single-answer rendering.
   const inline = view.toolCalls.length > 0
   const answer = inline
-    ? view.finalAnswer || fallbackResult || ''
-    : view.answer || fallbackResult || ''
+    ? view.finalAnswer || cleanFallback
+    : view.answer || cleanFallback
   const approval = view.pendingApproval
   const approvalBusy = approval ? resolvingApprovalId === approval.approvalId : false
 

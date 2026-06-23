@@ -27,8 +27,12 @@ class ParserResult:
 
 class OutputParser:
     _CODE_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
+    _XML_TOOL_CALLS_RE = re.compile(
+        r"<tool_calls>\s*([\s\S]*?)(?:</tool_calls>|</code>|</pre>|$)",
+        re.IGNORECASE,
+    )
     _PROTOCOL_OPENER_RE = re.compile(
-        r'\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call)"'
+        r'\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call)"|<tool_calls>'
     )
     # Matches: <|tool_call>call:tool.name{key:<|">val<|">}<tool_call>
     # Emitted by some local/fine-tuned models that use special-token delimiters
@@ -57,6 +61,12 @@ class OutputParser:
         match = self._CODE_BLOCK_RE.search(text)
         if match:
             result = self._try_parse_json(match.group(1).strip())
+            if result:
+                return result
+
+        match = self._XML_TOOL_CALLS_RE.search(text)
+        if match:
+            result = self._try_parse_xml_tool_calls(match.group(1).strip())
             if result:
                 return result
 
@@ -267,6 +277,44 @@ class OutputParser:
             )
 
         return None
+
+    def _try_parse_xml_tool_calls(self, text: str) -> "ParserResult | None":
+        try:
+            data = json.loads(text)
+        except (json.JSONDecodeError, ValueError):
+            data = None
+            for candidate in self._extract_json_objects(text):
+                try:
+                    parsed = json.loads(candidate)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if isinstance(parsed, dict):
+                    data = parsed
+                    break
+            if data is None:
+                return None
+        if not isinstance(data, dict):
+            return None
+
+        if data.get("type") in {"tool_call", "tool_calls", "subagent_call"}:
+            return self._try_parse_json(json.dumps(data))
+
+        calls = data.get("calls")
+        if not isinstance(calls, list) or not calls:
+            return None
+        tool_calls = [
+            self._normalize_tool_call(call, idx)
+            for idx, call in enumerate(calls)
+            if isinstance(call, dict)
+        ]
+        if not tool_calls:
+            return None
+        return ParserResult(
+            is_final=False,
+            is_tool_call=True,
+            tool_calls=tool_calls,
+            is_batch=True,
+        )
 
     def _try_parse_tag_tool_call(self, text: str) -> "ParserResult | None":
         m = self._TAG_TOOL_RE.search(text)

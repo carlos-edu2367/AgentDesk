@@ -23,6 +23,20 @@ describe('AssistantTurn', () => {
     expect(screen.getByRole('heading', { name: 'Done' })).toBeInTheDocument()
   })
 
+  it('does not render protocol markup from fallback results', () => {
+    render(
+      <AssistantTurn
+        events={[]}
+        fallbackResult={
+          'Vou ler os arquivos.<tool_calls>{"calls":[{"id":"read","tool":"filesystem.read","arguments":{"path":"a.js"}}]}</code></pre>'
+        }
+      />,
+    )
+
+    expect(screen.getByText('Vou ler os arquivos.')).toBeInTheDocument()
+    expect(screen.queryByText(/tool_calls/)).not.toBeInTheDocument()
+  })
+
   it('hides thinking by default and reveals it on click', () => {
     render(<AssistantTurn events={[ev('model_reasoning_chunk', { delta: 'secret reasoning' })]} />)
     expect(screen.queryByText('secret reasoning')).not.toBeInTheDocument()

@@ -74,6 +74,7 @@ const TOOL_REQUEST_TYPES = new Set([
 // bare {"tool":"filesystem.write",…} with no type. Dotted names are our
 // tool-naming convention, mirroring the backend parser's leniency.
 const PROTOCOL_OPENER = /\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call|[a-z_]+\.[a-z_.]+)"|\{\s*"tool"\s*:\s*"[a-z_]+\.[a-z_.]+"/
+const XML_TOOL_CALLS = /<tool_calls>[\s\S]*?(?:<\/tool_calls>|<\/code>\s*<\/pre>|<\/code>|<\/pre>|$)/gi
 
 /**
  * Removes AgentDesk protocol JSON objects from streamed model text, leaving the
@@ -84,6 +85,7 @@ const PROTOCOL_OPENER = /\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|s
  */
 export function stripProtocolJson(text: string): string {
   if (!text) return ''
+  text = text.replace(XML_TOOL_CALLS, '')
   let out = ''
   let i = 0
   while (i < text.length) {
@@ -207,7 +209,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
       return
     }
     if (type === 'agent_completed') {
-      finalAnswer = (c.result as string) ?? finalAnswer
+      finalAnswer = stripProtocolJson((c.result as string) ?? finalAnswer)
       return
     }
     if (type === 'execution_failed' || type === 'error' || type === 'team_failed') {
@@ -303,7 +305,7 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     answer: finalAnswer || stripProtocolJson(streamed),
     finalAnswer,
     segments,
-    thinking,
+    thinking: stripProtocolJson(thinking),
     toolCalls,
     notices,
     pendingApproval: Array.from(approvals.values())[0],
