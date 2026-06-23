@@ -77,20 +77,28 @@ Detection (Windows-first, degrade gracefully — never raise to the caller):
 Curated static catalog. `recommend(hw: HardwareInfo) -> Recommendations` computes a
 memory budget `budget = max(vram_gb or 0, ram_gb * 0.6)` and returns the matching tier
 plus the next lighter tier as fallbacks. Each model entry:
-`{ tag, label, params, approx_size_gb, min_budget_gb, vision: bool, blurb }`.
+`{ tag, label, params, approx_size_gb, min_budget_gb, vision: bool, blurb }`, with
+`min_budget_gb ≈ approx_size_gb * 1.25` (download size + context overhead).
 
-Tiers (Q4 quantized sizes; tags verified against the Ollama library):
+Tiers use the **current** Ollama-library tags and real download sizes verified
+2026-06-23 (Gemma 4, released 2026-03-31, and Qwen 3.5; both multimodal, Apache-2.0).
+"E" sizes are Gemma's effective-parameter edge variants; `-it-qat` is the smallest
+quality-preserving Gemma quant.
 
-| Budget GB | Tier | Models (tags) |
+| Budget GB | Tier | Models (tag — size) |
 |---|---|---|
-| < 4 | Light | `llama3.2:1b`, `qwen3:0.6b` |
-| 4–8 | Balanced-light | `llama3.2:3b`, `gemma3:4b`, `qwen3:4b` |
-| 8–16 | Balanced | `qwen3:8b`, `llama3.1:8b` |
-| 16–32 | Strong | `qwen3:14b`, `gemma3:12b` |
-| ≥ 32 | Max | `gemma3:27b`, `qwen3:30b` |
+| < 4 | Light | `qwen3.5:0.8b` (1.0) · `qwen3.5:2b` (2.7) |
+| 4–8 | Balanced-light | `qwen3.5:4b` (3.4) · `gemma4:e2b-it-qat` (4.3) · `qwen3.5:9b` (6.6) |
+| 8–16 | Balanced | `gemma4:12b` (7.6) · `gemma4:e4b` (9.6) · `qwen3.5:9b` (6.6) |
+| 16–32 | Strong | `qwen3.5:27b` (17) · `gemma4:26b` (18) |
+| ≥ 32 | Max | `gemma4:31b` (20) · `qwen3.5:35b` (24) |
 
-The catalog is a plain data module so tags can be adjusted without touching logic.
-`recommend()` is pure and unit-tested against fixed `HardwareInfo` inputs.
+`gemma4:122b`/`qwen3.5:122b`-class models are intentionally excluded (out of scope for
+consumer hardware). The catalog is a plain data module so tags/sizes can be adjusted
+without touching logic. `recommend()` is pure and unit-tested against fixed
+`HardwareInfo` inputs. Gemma 4 entries are `vision: true`; the Ollama provider's
+`_VISION_FAMILIES` list (`backend/app/providers/ollama.py`) gains `gemma4` and
+`qwen3.5` so vision capability is reported correctly.
 
 ### 4.3 `ollama_manager.py`
 - `status() -> { installed, running, version, models: [str] }`.
