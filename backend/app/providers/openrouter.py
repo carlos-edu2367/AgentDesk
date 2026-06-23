@@ -24,6 +24,18 @@ from .errors import (
     EmbeddingUnavailableError
 )
 
+def _msg_to_openrouter(m) -> dict:
+    if not getattr(m, "images", None):
+        return {"role": m.role, "content": m.content}
+    parts = [{"type": "text", "text": m.content}]
+    for img in m.images:
+        parts.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{img.media_type};base64,{img.base64}"},
+        })
+    return {"role": m.role, "content": parts}
+
+
 class OpenRouterProvider(ModelProvider):
     def __init__(self, provider_id: str, base_url: str = "https://openrouter.ai/api/v1", config: Dict[str, Any] = None):
         self.provider_id = provider_id
@@ -99,7 +111,7 @@ class OpenRouterProvider(ModelProvider):
     def _prepare_payload(self, request: ChatRequest, stream: bool = False) -> Dict[str, Any]:
         return {
             "model": request.model,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "messages": [_msg_to_openrouter(m) for m in request.messages],
             "temperature": request.temperature,
             "top_p": request.top_p,
             "max_tokens": request.max_tokens,
