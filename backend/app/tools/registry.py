@@ -113,6 +113,13 @@ def register_core_tools() -> None:
     )
     from app.tools.core.agent_tools import AgentListTool, AgentCallTool
     from app.tools.core.team_tools import TeamListTool, TeamExecuteTool
+    from app.tools.core.computer_tools import (
+        ScreenPerceiveTool,
+        ScreenClickTool,
+        ScreenTypeTool,
+        ScreenKeyTool,
+        ScreenScrollTool,
+    )
 
     core_tools = [
         # Read-only filesystem
@@ -151,6 +158,12 @@ def register_core_tools() -> None:
         AgentCallTool(),
         TeamListTool(),
         TeamExecuteTool(),
+        # Computer use (Windows UIA + screen capture + actuation)
+        ScreenPerceiveTool(),
+        ScreenClickTool(),
+        ScreenTypeTool(),
+        ScreenKeyTool(),
+        ScreenScrollTool(),
     ]
     for tool in core_tools:
         if not tool_registry.exists(tool.name):

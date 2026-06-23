@@ -29,6 +29,21 @@ def test_actuators_are_critical_perceive_is_not():
     assert "screen.perceive" not in CRITICAL_TOOLS
 
 
+def test_screen_tools_in_registry():
+    from app.tools.registry import ToolRegistry, register_core_tools
+    reg = ToolRegistry()
+    # temporarily swap global for test isolation
+    import app.tools.registry as _reg_mod
+    original = _reg_mod.tool_registry
+    _reg_mod.tool_registry = reg
+    try:
+        register_core_tools()
+    finally:
+        _reg_mod.tool_registry = original
+    for name in ["screen.perceive", "screen.click", "screen.type", "screen.key", "screen.scroll"]:
+        assert reg.exists(name), f"tool {name} not registered"
+
+
 def test_computer_use_never_native():
     assert not (NATIVE_TOOLS & set(CAPABILITIES["computer_use"]))
 
