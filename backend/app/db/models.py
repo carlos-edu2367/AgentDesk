@@ -12,6 +12,11 @@ class UserModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     settings = Column(JSON, default=dict)
 
+class AppSettingModel(Base):
+    __tablename__ = "app_settings"
+    key = Column(String, primary_key=True)
+    value = Column(Text)
+
 class ProviderModel(Base):
     __tablename__ = "providers"
     id = Column(String, primary_key=True)
