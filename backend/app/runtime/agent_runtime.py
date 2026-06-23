@@ -561,14 +561,41 @@ class AgentRuntime:
                     {"model": agent.llm_config.model, "step": step, "stream": stream}
                 )
 
+                # Build messages: for computer-use turns, attach the latest
+                # screenshot to the most recent perceive message only.
+                _cu_active = bool(runtime_options.get("computer_use_enabled", False))
+                if _cu_active and any(m.get("screenshot_b64") for m in messages):
+                    _built_msgs = build_messages_with_vision(messages)
+                    _has_img = any(bool(m.images) for m in _built_msgs)
+                else:
+                    _built_msgs = [ChatMessage(role=m["role"], content=m.get("content", "")) for m in messages]
+                    _has_img = False
+
+                # Route to vision model when the turn carries an image.
+                from app.runtime.vision_routing import pick_vision_target
+                _llm_cfg = agent.llm_config
+                _main_provider = provider
+                _request_provider_id = provider_config.id
+                _request_model = _llm_cfg.model
+                if _has_img:
+                    _vision_target = pick_vision_target(_llm_cfg, main_supports_vision=False)
+                    if _vision_target:
+                        _request_provider_id, _request_model = _vision_target
+                        try:
+                            _main_provider = provider_registry.get_by_id_and_model(
+                                _request_provider_id, _request_model
+                            ) or provider
+                        except Exception:
+                            _main_provider = provider
+
                 request = ChatRequest(
-                    provider_id=provider_config.id,
-                    model=agent.llm_config.model,
-                    messages=[ChatMessage(role=m["role"], content=m["content"]) for m in messages],
-                    temperature=agent.llm_config.temperature,
-                    top_p=agent.llm_config.top_p,
-                    context_window=agent.llm_config.context_window,
-                    max_tokens=agent.llm_config.max_tokens,
+                    provider_id=_request_provider_id,
+                    model=_request_model,
+                    messages=_built_msgs,
+                    temperature=_llm_cfg.temperature,
+                    top_p=_llm_cfg.top_p,
+                    context_window=_llm_cfg.context_window,
+                    max_tokens=_llm_cfg.max_tokens,
                     stream=stream,
                 )
 
@@ -703,12 +730,17 @@ class AgentRuntime:
                 elif tool_results:
                     result = tool_results[0]
                     if result.get("status") == "success":
-                        messages.append({"role": "user", "content": json.dumps({
+                        _result_data = result.get("result", {})
+                        _msg: dict = {"role": "user", "content": json.dumps({
                             "type": "tool_result",
                             "tool": result.get("tool"),
                             "status": "success",
-                            "result": result.get("result"),
-                        })})
+                            "result": _result_data,
+                        })}
+                        # Carry screenshot alongside for vision injection.
+                        if isinstance(_result_data, dict) and _result_data.get("image_base64"):
+                            _msg["screenshot_b64"] = _result_data.pop("image_base64")
+                        messages.append(_msg)
                     else:
                         messages.append({"role": "user", "content": json.dumps({
                             "type": "tool_error",
