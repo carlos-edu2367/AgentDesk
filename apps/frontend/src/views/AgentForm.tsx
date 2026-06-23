@@ -50,6 +50,100 @@ const DEFAULT_TOOLS_CONFIG: AgentToolsConfig = {
   blocked_tools: [],
 }
 
+type ModelPickerProps = {
+  id: string
+  models: ModelInfo[]
+  value: string
+  onChange: (value: string) => void
+  placeholder: string
+}
+
+function ModelPicker({ id, models, value, onChange, placeholder }: ModelPickerProps) {
+  const [query, setQuery] = useState(value)
+
+  useEffect(() => {
+    setQuery(value)
+  }, [value])
+
+  const filteredModels = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return models
+    return models.filter(model => {
+      const label = model.name || model.id
+      return model.id.toLowerCase().includes(q) || label.toLowerCase().includes(q)
+    })
+  }, [models, query])
+
+  const handleInput = (nextValue: string) => {
+    setQuery(nextValue)
+    onChange(nextValue)
+  }
+
+  if (models.length === 0) {
+    return (
+      <input
+        id={id}
+        className="form-input"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        required
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        id={id}
+        className="form-input"
+        value={query}
+        onChange={e => handleInput(e.target.value)}
+        placeholder="Search models..."
+        autoComplete="off"
+        role="combobox"
+        aria-expanded="true"
+        aria-controls={`${id}-options`}
+        required
+      />
+      <div className="text-xs text-slate-500">
+        Showing {filteredModels.length} of {models.length} models
+      </div>
+      <div
+        id={`${id}-options`}
+        role="listbox"
+        className="max-h-64 overflow-y-auto rounded-md border border-slate-800 bg-slate-950"
+      >
+        {filteredModels.length > 0 ? (
+          filteredModels.map(model => {
+            const label = model.name || model.id
+            return (
+              <button
+                key={model.id}
+                type="button"
+                role="option"
+                aria-selected={value === model.id}
+                className={`block w-full border-b border-slate-900 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-800 ${
+                  value === model.id ? 'bg-blue-500/15 text-blue-200' : 'text-slate-200'
+                }`}
+                onClick={() => {
+                  setQuery(model.id)
+                  onChange(model.id)
+                }}
+              >
+                <span className="block font-medium">{label}</span>
+                {label !== model.id && <span className="block font-mono text-xs text-slate-500">{model.id}</span>}
+              </button>
+            )
+          })
+        ) : (
+          <div className="px-3 py-2 text-sm text-slate-500">No models match this search.</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function AgentForm() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
@@ -311,18 +405,13 @@ export function AgentForm() {
               {loadingModels ? (
                 <p className="text-slate-500 text-sm py-2">Loading models...</p>
               ) : models.length > 0 ? (
-                <select
+                <ModelPicker
                   id="agent-model"
-                  className="form-select"
+                  models={models}
                   value={modelConfig.model}
-                  onChange={e => setModelConfig(prev => ({ ...prev, model: e.target.value }))}
-                  required
-                >
-                  <option value="">Select a model...</option>
-                  {models.map(m => (
-                    <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                  ))}
-                </select>
+                  onChange={model => setModelConfig(prev => ({ ...prev, model }))}
+                  placeholder="e.g. llama3:8b or openai/gpt-4o"
+                />
               ) : (
                 <input
                   id="agent-model"
@@ -420,17 +509,13 @@ export function AgentForm() {
                       {loadingVisionModels ? (
                         <p className="text-slate-500 text-sm py-2">Loading models…</p>
                       ) : visionModels.length > 0 ? (
-                        <select
+                        <ModelPicker
                           id="vision-model"
-                          className="form-select"
+                          models={visionModels}
                           value={modelConfig.vision_model ?? ''}
-                          onChange={e => setModelConfig(prev => ({ ...prev, vision_model: e.target.value || undefined }))}
-                        >
-                          <option value="">Select a model…</option>
-                          {visionModels.map(m => (
-                            <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                          ))}
-                        </select>
+                          onChange={model => setModelConfig(prev => ({ ...prev, vision_model: model || undefined }))}
+                          placeholder="e.g. gemma3:4b or qwen2.5vl:7b"
+                        />
                       ) : (
                         <input
                           id="vision-model"

@@ -39,7 +39,7 @@ def _msg_to_openrouter(m) -> dict:
 class OpenRouterProvider(ModelProvider):
     def __init__(self, provider_id: str, base_url: str = "https://openrouter.ai/api/v1", config: Dict[str, Any] = None):
         self.provider_id = provider_id
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or "https://openrouter.ai/api/v1").rstrip("/")
         self.config = config or {}
         self.api_key = self.config.get("api_key")
         # 60s was too tight: a single non-trivial completion (especially a member

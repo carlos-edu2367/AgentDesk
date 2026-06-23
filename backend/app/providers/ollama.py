@@ -40,7 +40,7 @@ def _msg_to_ollama(m) -> dict:
 class OllamaProvider(ModelProvider):
     def __init__(self, provider_id: str, base_url: str = "http://localhost:11434", config: Dict[str, Any] = None):
         self.provider_id = provider_id
-        self.base_url = base_url.rstrip("/")
+        self.base_url = (base_url or "http://localhost:11434").rstrip("/")
         self.config = config or {}
         # Local models can be slow to produce long completions; 60s was too tight
         # and surfaced as request timeouts mid-turn. Overridable per provider.

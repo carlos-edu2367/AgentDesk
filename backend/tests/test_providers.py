@@ -55,6 +55,12 @@ async def test_ollama_list_models():
     assert models[0].id == "qwen3:8b"
 
 @pytest.mark.asyncio
+async def test_ollama_provider_uses_default_base_url_when_missing():
+    provider = OllamaProvider(provider_id="ollama_local", base_url=None)
+
+    assert provider.base_url == "http://localhost:11434"
+
+@pytest.mark.asyncio
 async def test_ollama_chat(chat_request):
     provider = OllamaProvider(provider_id="ollama_local")
     mock_response = MagicMock()
@@ -84,6 +90,12 @@ async def test_ollama_embeddings():
 async def test_openrouter_missing_api_key():
     with pytest.raises(ApiKeyMissingError):
         OpenRouterProvider(provider_id="or", config={})
+
+@pytest.mark.asyncio
+async def test_openrouter_provider_uses_default_base_url_when_missing():
+    provider = OpenRouterProvider(provider_id="or", base_url=None, config={"api_key": "sk-123"})
+
+    assert provider.base_url == "https://openrouter.ai/api/v1"
 
 @pytest.mark.asyncio
 async def test_openrouter_chat(chat_request):

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AgentForm } from '../views/AgentForm'
 import { agentsApi } from '../api/agents'
+import { providersApi } from '../api/providers'
 import { pluginsApi } from '../api/plugins'
 import { mcpApi } from '../api/mcp'
 
@@ -132,7 +133,7 @@ describe('AgentForm (create)', () => {
     await userEvent.type(screen.getByPlaceholderText('e.g. Research Assistant'), 'New Agent')
     await userEvent.selectOptions(screen.getByLabelText('Provider *'), 'p1')
     await waitFor(() => expect(screen.getByText('LLaMA 3')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Model *'), 'llama3')
+    await userEvent.click(screen.getByRole('option', { name: /LLaMA 3/ }))
     await userEvent.click(screen.getByLabelText('Report Writer'))
     await userEvent.click(screen.getByRole('button', { name: 'Create Agent' }))
 
@@ -148,7 +149,7 @@ describe('AgentForm (create)', () => {
     await userEvent.type(screen.getByPlaceholderText('e.g. Research Assistant'), 'New Agent')
     await userEvent.selectOptions(screen.getByLabelText('Provider *'), 'p1')
     await waitFor(() => expect(screen.getByText('LLaMA 3')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Model *'), 'llama3')
+    await userEvent.click(screen.getByRole('option', { name: /LLaMA 3/ }))
     await userEvent.click(screen.getByLabelText('Sample Plugin'))
     await userEvent.click(screen.getByRole('button', { name: 'Create Agent' }))
 
@@ -165,7 +166,7 @@ describe('AgentForm (create)', () => {
     await userEvent.type(screen.getByPlaceholderText('e.g. Research Assistant'), 'New Agent')
     await userEvent.selectOptions(screen.getByLabelText('Provider *'), 'p1')
     await waitFor(() => expect(screen.getByText('LLaMA 3')).toBeInTheDocument())
-    await userEvent.selectOptions(screen.getByLabelText('Model *'), 'llama3')
+    await userEvent.click(screen.getByRole('option', { name: /LLaMA 3/ }))
     await userEvent.click(screen.getByLabelText('Filesystem MCP'))
     await userEvent.click(screen.getByRole('button', { name: 'Create Agent' }))
 
@@ -173,5 +174,32 @@ describe('AgentForm (create)', () => {
       expect(agentsApi.updateMcpServers).toHaveBeenCalledWith('agent_new', ['filesystem'])
       expect(mcpApi.list).toHaveBeenCalled()
     })
+  })
+
+  it('lets users search and select OpenRouter models from the loaded model list', async () => {
+    vi.mocked(providersApi.list).mockResolvedValue([
+      { id: 'or1', name: 'OpenRouter', type: 'openrouter', base_url: 'https://openrouter.ai/api/v1', enabled: true, config: { api_key: 'sk-...1234' } },
+    ])
+    vi.mocked(providersApi.models).mockResolvedValue([
+      { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini' },
+      { id: 'poolside/laguna-m1:free', name: 'Poolside Laguna M1 Free' },
+      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4' },
+    ])
+
+    render(<MemoryRouter><AgentForm /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByText('OpenRouter (openrouter)')).toBeInTheDocument())
+
+    await userEvent.selectOptions(screen.getByLabelText('Provider *'), 'or1')
+    await waitFor(() => expect(screen.getByRole('option', { name: /GPT-4o mini/ })).toBeInTheDocument())
+
+    const modelInput = screen.getByLabelText('Model *')
+    await userEvent.type(modelInput, 'laguna')
+
+    expect(screen.getByRole('option', { name: /Poolside Laguna M1 Free/ })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /GPT-4o mini/ })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('option', { name: /Poolside Laguna M1 Free/ }))
+
+    expect(modelInput).toHaveValue('poolside/laguna-m1:free')
   })
 })
