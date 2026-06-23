@@ -26,6 +26,10 @@ class EventType(str, Enum):
     MODEL_REQUEST_STARTED = "model_request_started"
     MODEL_CHUNK = "model_chunk"
     MODEL_REASONING_CHUNK = "model_reasoning_chunk"
+    # Synthetic types emitted by the conversation-detail endpoint: consecutive
+    # chunk runs are collapsed into a single event to reduce payload size.
+    MODEL_TEXT_AGGREGATED = "model_text_aggregated"
+    MODEL_REASONING_AGGREGATED = "model_reasoning_aggregated"
     MODEL_OUTPUT_TRUNCATED = "model_output_truncated"
     MODEL_COMPLETED = "model_completed"
     AGENT_COMPLETED = "agent_completed"

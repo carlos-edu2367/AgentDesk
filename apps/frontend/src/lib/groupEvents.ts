@@ -192,6 +192,20 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
       thinking += (c.delta as string) ?? ''
       return
     }
+    // Aggregated variants emitted by the conversation-detail endpoint for
+    // completed turns: consecutive chunk runs are collapsed server-side into a
+    // single event to reduce payload size. The text field replaces the stream
+    // of delta fields, so we handle them identically to their streaming peers.
+    if (type === 'model_text_aggregated') {
+      const text = (c.text as string) ?? ''
+      streamed += text
+      segBuf += text
+      return
+    }
+    if (type === 'model_reasoning_aggregated') {
+      thinking += (c.text as string) ?? ''
+      return
+    }
     if (type === 'agent_completed') {
       finalAnswer = (c.result as string) ?? finalAnswer
       return

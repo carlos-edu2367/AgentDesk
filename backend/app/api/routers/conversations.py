@@ -11,17 +11,93 @@ from app.db.repositories.registry import (
     approval_repo,
 )
 from app.domain.utils import CHAT_DISPLAY_MAX_CHARS, generate_id, sanitize_for_output
-from app.domain.enums import ExecutionType, ExecutionStatus
+from app.domain.enums import ExecutionType, ExecutionStatus, EventType
 from app.orchestrator.execution_engine import execution_engine
 from app.orchestrator.team_engine import team_execution_engine
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
-# These event types are only useful while a turn is actively streaming. For
-# completed turns the final answer comes from agent_completed; shipping thousands
-# of raw token deltas over the wire just slows initial load.
-_STREAMING_ONLY_TYPES = frozenset({'model_chunk', 'model_reasoning_chunk'})
 _COMPLETED_STATUSES = frozenset({'completed', 'failed', 'cancelled'})
+
+
+def _aggregate_chunks(
+    event_views: list[schemas.ExecutionEvent],
+    exec_id: str,
+) -> list[schemas.ExecutionEvent]:
+    """
+    Collapse consecutive model_chunk / model_reasoning_chunk runs into single
+    model_text_aggregated / model_reasoning_aggregated events respectively.
+
+    Interleaving is preserved: when a non-chunk event interrupts a run, the
+    accumulated buffer is flushed before appending the other event. This means
+    tool calls, approvals, and lifecycle events all remain in their original
+    positions, with narration text collected into far fewer objects.
+
+    Example — 20 000 model_chunk events become ~10 model_text_aggregated events
+    (one per inter-tool narration block) while the tool-call chain stays intact.
+    """
+    from datetime import datetime as _dt
+    _sentinel = _dt(2000, 1, 1)
+
+    result: list[schemas.ExecutionEvent] = []
+    text_parts: list[str] = []
+    reasoning_parts: list[str] = []
+    text_ts: _dt | None = None
+    reasoning_ts: _dt | None = None
+
+    def _flush_text() -> None:
+        nonlocal text_parts, text_ts
+        combined = ''.join(text_parts)
+        if combined:
+            result.append(schemas.ExecutionEvent(
+                id=f'agg-text-{len(result)}',
+                execution_id=exec_id,
+                type=EventType.MODEL_TEXT_AGGREGATED,
+                source='runtime',
+                source_id='',
+                content={'text': combined},
+                created_at=text_ts or _sentinel,
+            ))
+        text_parts = []
+        text_ts = None
+
+    def _flush_reasoning() -> None:
+        nonlocal reasoning_parts, reasoning_ts
+        combined = ''.join(reasoning_parts)
+        if combined:
+            result.append(schemas.ExecutionEvent(
+                id=f'agg-reasoning-{len(result)}',
+                execution_id=exec_id,
+                type=EventType.MODEL_REASONING_AGGREGATED,
+                source='runtime',
+                source_id='',
+                content={'text': combined},
+                created_at=reasoning_ts or _sentinel,
+            ))
+        reasoning_parts = []
+        reasoning_ts = None
+
+    for ev in event_views:
+        if ev.type == EventType.MODEL_CHUNK:
+            delta = (ev.content or {}).get('delta', '')
+            if delta:
+                if text_ts is None:
+                    text_ts = ev.created_at
+                text_parts.append(delta)
+        elif ev.type == EventType.MODEL_REASONING_CHUNK:
+            delta = (ev.content or {}).get('delta', '')
+            if delta:
+                if reasoning_ts is None:
+                    reasoning_ts = ev.created_at
+                reasoning_parts.append(delta)
+        else:
+            _flush_text()
+            _flush_reasoning()
+            result.append(ev)
+
+    _flush_text()
+    _flush_reasoning()
+    return result
 
 
 @router.post("", response_model=schemas.Conversation)
@@ -98,14 +174,12 @@ def get_conversation(id: str, db: Session = Depends(get_db)):
 
     turns: List[schemas.ConversationTurn] = []
     for ex in executions:
-        q = (
+        events = (
             db.query(execution_event_repo.model)
             .filter(execution_event_repo.model.execution_id == ex.id)
             .order_by(execution_event_repo.model.created_at.asc())
+            .all()
         )
-        if ex.status in _COMPLETED_STATUSES:
-            q = q.filter(execution_event_repo.model.type.notin_(_STREAMING_ONLY_TYPES))
-        events = q.all()
         event_views = [
             schemas.ExecutionEvent(
                 **{
@@ -115,6 +189,11 @@ def get_conversation(id: str, db: Session = Depends(get_db)):
             )
             for e in events
         ]
+        # For completed turns collapse streaming-token runs into aggregated
+        # events. This slashes payload size by ~99% on long turns while keeping
+        # the full narration, thinking trace, and tool-call chain intact.
+        if ex.status in _COMPLETED_STATUSES:
+            event_views = _aggregate_chunks(event_views, ex.id)
         turns.append(
             schemas.ConversationTurn(
                 execution=schemas.Execution.model_validate(ex),
