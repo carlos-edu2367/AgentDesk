@@ -1,0 +1,15 @@
+export function Logo({ className = 'h-8 w-8' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} role="img" aria-label="AgentDesk" xmlns="http://www.w3.org/2000/svg">
+      <rect width="64" height="64" rx="14" fill="#0f172a" />
+      <circle cx="32" cy="32" r="20" fill="none" stroke="#1e3a5f" strokeWidth="2" />
+      <line x1="32" y1="32" x2="32" y2="14" stroke="#3b82f6" strokeWidth="2.5" />
+      <line x1="32" y1="32" x2="17" y2="43" stroke="#3b82f6" strokeWidth="2.5" />
+      <line x1="32" y1="32" x2="47" y2="43" stroke="#3b82f6" strokeWidth="2.5" />
+      <circle cx="32" cy="14" r="4.5" fill="#38bdf8" />
+      <circle cx="17" cy="43" r="4.5" fill="#38bdf8" />
+      <circle cx="47" cy="43" r="4.5" fill="#38bdf8" />
+      <circle cx="32" cy="32" r="7" fill="#3b82f6" />
+    </svg>
+  )
+}
