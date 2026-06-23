@@ -1,6 +1,41 @@
 from app.tools.core import computer
 
 
+def test_press_keys_maps_combo(monkeypatch):
+    events = []
+
+    class FakeKb:
+        def press(self, k):
+            events.append(("press", k))
+
+        def release(self, k):
+            events.append(("release", k))
+
+    monkeypatch.setattr(computer, "_keyboard", FakeKb())
+    computer.press_keys("ctrl+a")
+
+    ops = [op for op, _ in events]
+    keys = [k for _, k in events]
+
+    # 2 presses, then 2 releases
+    assert ops == ["press", "press", "release", "release"]
+    # single key: just press + release
+    single_events = []
+    monkeypatch.setattr(computer, "_keyboard", FakeKb())
+
+    class TrackKb:
+        def __init__(self): self.evts = []
+        def press(self, k): self.evts.append(("press", k))
+        def release(self, k): self.evts.append(("release", k))
+
+    kb2 = TrackKb()
+    monkeypatch.setattr(computer, "_keyboard", kb2)
+    computer.press_keys("enter")
+    assert len(kb2.evts) == 2
+    assert kb2.evts[0][0] == "press"
+    assert kb2.evts[1][0] == "release"
+
+
 def test_filter_keeps_interactive_visible_and_caps_count():
     raw = [
         {"role": "Button", "name": "OK", "bbox": (0, 0, 50, 20), "visible": True, "enabled": True, "area": 1000},

@@ -176,7 +176,7 @@ def _ms():
     if _mouse is None:
         from pynput.mouse import Controller
         _mouse = Controller()
-    return _ms
+    return _mouse
 
 
 def _to_key(name: str):
