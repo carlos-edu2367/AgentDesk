@@ -23,6 +23,19 @@ def test_ollama_text_only_is_unchanged():
     assert _msg_to_ollama(m) == {"role": "user", "content": "oi"}
 
 
+from app.providers.ollama import _model_supports_vision
+
+
+def test_known_vision_families_detected():
+    assert _model_supports_vision("llava:7b") is True
+    assert _model_supports_vision("gemma3:4b") is True
+    assert _model_supports_vision("qwen2.5vl:7b") is True
+
+
+def test_text_model_not_vision():
+    assert _model_supports_vision("llama3.1:8b") is False
+
+
 def test_openrouter_text_only_is_string_content():
     m = ChatMessage(role="user", content="oi")
     assert _msg_to_openrouter(m) == {"role": "user", "content": "oi"}

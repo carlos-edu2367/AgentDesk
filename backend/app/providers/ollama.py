@@ -21,6 +21,15 @@ from .errors import (
     EmbeddingUnavailableError
 )
 
+_VISION_FAMILIES = ("llava", "gemma3", "qwen2.5vl", "qwen2.5-vl",
+                    "llama3.2-vision", "minicpm-v", "moondream", "bakllava")
+
+
+def _model_supports_vision(name: str) -> bool:
+    n = name.lower()
+    return any(fam in n for fam in _VISION_FAMILIES)
+
+
 def _msg_to_ollama(m) -> dict:
     out = {"role": m.role, "content": m.content}
     if getattr(m, "images", None):
@@ -79,7 +88,8 @@ class OllamaProvider(ModelProvider):
             models.append(ModelInfo(
                 id=m["name"],
                 name=m["name"],
-                context_window=8192 # default local context window assumption
+                context_window=8192,
+                supports_vision=_model_supports_vision(m["name"])
             ))
         return models
 
