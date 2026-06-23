@@ -231,6 +231,21 @@ class OutputParser:
                     }],
                 )
 
+        # Shape: {"type": "<tool.name>", "path": "...", ...} — arguments inlined at
+        # root with no "arguments" wrapper. Some local models skip the wrapper
+        # entirely and put the tool params directly alongside "type".
+        if isinstance(msg_type, str) and "." in msg_type:
+            inline_args = {k: v for k, v in data.items() if k not in ("type", "id")}
+            return ParserResult(
+                is_final=False,
+                is_tool_call=True,
+                tool_calls=[{
+                    "id": str(data.get("id") or "call_1"),
+                    "tool": msg_type,
+                    "arguments": inline_args,
+                }],
+            )
+
         return None
 
     def _normalize_tool_call(self, data: Dict[str, Any], index: int) -> Dict[str, Any]:

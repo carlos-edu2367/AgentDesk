@@ -58,6 +58,17 @@ def test_parser_accepts_tool_call_without_type_field():
     assert parsed.arguments == {"path": "a.js"}
 
 
+def test_parser_accepts_tool_args_inlined_at_root():
+    """Some local models emit {"type": "<tool>", "path": "..."} with no "arguments"
+    wrapper — the tool params sit directly alongside "type". Accept it."""
+    parsed = OutputParser().parse(
+        '{"type": "filesystem.read", "path": "C:/Users/Carlos/testes/index.html"}'
+    )
+    assert parsed.is_tool_call
+    assert parsed.tool_name == "filesystem.read"
+    assert parsed.arguments == {"path": "C:/Users/Carlos/testes/index.html"}
+
+
 def test_parser_does_not_misclassify_plain_json_as_tool_call():
     """A non-dotted unknown type without a tool field is not a tool call."""
     parsed = OutputParser().parse('{"type": "status", "arguments": {}}')

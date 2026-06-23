@@ -38,3 +38,36 @@
 [2m20:55:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Layout.tsx, /src/index.css[22m
 [2m20:55:31[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
 [2m20:55:38[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/Config.tsx, /src/index.css[22m
+[2m21:56:59[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/domain.ts[22m
+[2m21:58:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:58:19[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:58:27[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:58:37[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:58:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:58:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m21:59:02[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m21:59:07[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m21:59:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m21:59:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/Agents.tsx, /src/index.css[22m
+[2m21:59:29[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/Agents.tsx, /src/index.css[22m
+[2m21:59:58[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/Sidebar.test.tsx[22m
+[2m22:00:08[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/Agents.test.tsx[22m
+[2m22:00:15[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ConversationView.test.tsx[22m
+[2m22:00:21[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ConversationView.test.tsx[22m
+[2m22:00:26[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ConversationView.test.tsx[22m
+[2m22:00:53[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ConversationView.test.tsx[22m
+[2m22:11:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/views/Agents.tsx, /src/views/ConversationView.tsx, /src/views/Teams.tsx, /src/components/RootRedirect.tsx, /src/components/Sidebar.tsx[22m
+[2m22:11:23[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/chat/AssistantTurn.tsx[22m
+[2m22:11:30[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/chat/AssistantTurn.tsx[22m
+[2m22:11:34[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/chat/AssistantTurn.tsx[22m
+[2m22:11:44[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/chat/AssistantTurn.tsx[22m
+[2m22:11:53[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/index.css, /src/components/chat/AssistantTurn.tsx[22m
+[2m22:11:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/ToolCallChain.tsx, /src/index.css[22m
+[2m22:12:05[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/AssistantTurn.tsx, /src/index.css[22m
+[2m22:12:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/AssistantTurn.tsx, /src/index.css[22m
+[2m22:12:28[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m22:12:37[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m22:12:46[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m22:12:57[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
+[2m22:13:10[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/groupEvents.test.ts[22m
+[2m22:13:20[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ChatComponents.test.tsx[22m
