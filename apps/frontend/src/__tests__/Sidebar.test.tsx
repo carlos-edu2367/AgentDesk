@@ -6,6 +6,9 @@ import { Sidebar } from '../components/Sidebar'
 vi.mock('../hooks/useBackendHealth', () => ({
   useBackendHealth: () => ({ status: 'online', refresh: vi.fn() }),
 }))
+vi.mock('../hooks/useActiveExecutions', () => ({
+  useActiveExecutions: () => ({ conversationIds: new Set(), targetKeys: new Set(), refresh: vi.fn() }),
+}))
 vi.mock('../api/conversations', () => ({
   conversationsApi: {
     list: vi.fn().mockResolvedValue([

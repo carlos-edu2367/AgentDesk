@@ -15,6 +15,7 @@ from app.domain.schemas import Agent, AuditLogCreate, ExecutionEventCreate, Exec
 from app.domain.utils import generate_id
 from app.runtime.agent_runtime import AgentRuntime
 from .event_bus import event_bus
+from .execution_engine import execution_engine
 
 
 DEFAULT_MAX_SUBAGENT_DEPTH = 5
@@ -133,6 +134,22 @@ class TeamExecutionEngine:
                 stream=stream,
                 runtime_options=runtime_options,
             ):
+                # Honor a Stop request from the user. Cancellation is tracked on
+                # the shared registry owned by execution_engine, so the same
+                # POST /executions/{id}/cancel works for agent and team runs.
+                if execution_engine.is_cancelled(execution_id):
+                    await self._emit_and_save_event(db, execution_id, ExecutionEventCreate(
+                        execution_id=execution_id,
+                        type=EventType.EXECUTION_CANCELLED,
+                        source="orchestrator",
+                        source_id="engine",
+                        content={"reason": "User cancelled execution"},
+                    ))
+                    execution_repo.update(db, db_obj=execution, obj_in=ExecutionUpdate(
+                        status=ExecutionStatus.CANCELLED,
+                        completed_at=datetime.utcnow(),
+                    ))
+                    return
                 await self._emit_and_save_event(db, execution_id, event)
                 if event.type == EventType.EXECUTION_WAITING_APPROVAL:
                     execution_repo.update(db, db_obj=execution, obj_in=ExecutionUpdate(status=ExecutionStatus.WAITING_APPROVAL))
@@ -175,6 +192,7 @@ class TeamExecutionEngine:
         except Exception as exc:
             await self._fail_execution(db, execution_id, team_id, str(exc))
         finally:
+            execution_engine.clear_cancellation(execution_id)
             await asyncio.sleep(0.5)
             await event_bus.publish(execution_id, {"type": "sse_close_connection"})
             db.close()

@@ -10,6 +10,7 @@ const create = vi.fn()
 const update = vi.fn()
 const resolveApproval = vi.fn()
 const workspacesList = vi.fn()
+const cancelExecution = vi.fn()
 
 vi.mock('../api/conversations', () => ({
   conversationsApi: {
@@ -30,6 +31,12 @@ vi.mock('../api/workspaces', () => ({
 vi.mock('../api/approvals', () => ({
   approvalsApi: {
     resolve: (...args: unknown[]) => resolveApproval(...args),
+  },
+}))
+
+vi.mock('../api/executions', () => ({
+  executionsApi: {
+    cancel: (...args: unknown[]) => cancelExecution(...args),
   },
 }))
 
@@ -76,6 +83,8 @@ describe('ConversationView', () => {
     create.mockReset()
     update.mockReset()
     workspacesList.mockReset()
+    cancelExecution.mockReset()
+    cancelExecution.mockResolvedValue({ status: 'cancelled' })
     hookReturn = { events: [], connectionStatus: 'closed' }
     get.mockResolvedValue(baseDetail)
     sendMessage.mockResolvedValue({ execution_id: 'exec_new', conversation_id: 'conv_1', status: 'running' })
@@ -197,5 +206,77 @@ describe('ConversationView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
 
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  })
+
+  // A turn whose execution is still in flight when the chat is (re)opened.
+  function runningDetail(execId = 'exec_run') {
+    return {
+      conversation: { ...baseDetail.conversation },
+      turns: [
+        {
+          execution: {
+            id: execId,
+            type: 'agent',
+            target_id: 'agent_1',
+            conversation_id: 'conv_1',
+            user_input: 'Do work',
+            status: 'running',
+            approval_mode: 'manual',
+            workspace_ids: [],
+            created_at: '',
+            updated_at: '',
+            completed_at: null,
+            result: null,
+            error: null,
+          },
+          events: [],
+        },
+      ],
+    }
+  }
+
+  it('reconnects the live stream when reopening a chat whose last turn is still running', async () => {
+    get.mockResolvedValue(runningDetail())
+    hookReturn = {
+      connectionStatus: 'open',
+      events: [ev('exec_run', 'model_chunk', { delta: 'live progress' })],
+    }
+
+    renderAt('conv_1')
+
+    // Without an explicit send, the persisted running turn streams live again
+    // and the Stop control becomes available.
+    await waitFor(() => expect(screen.getByText('live progress')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeInTheDocument()
+  })
+
+  it('stops the agent by cancelling the active execution', async () => {
+    get.mockResolvedValue(runningDetail())
+    hookReturn = {
+      connectionStatus: 'open',
+      events: [ev('exec_run', 'model_chunk', { delta: 'working' })],
+    }
+
+    renderAt('conv_1')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop the agent' }))
+
+    await waitFor(() => expect(cancelExecution).toHaveBeenCalledWith('exec_run'))
+  })
+
+  it('hides Stop while the active turn is waiting for approval', async () => {
+    get.mockResolvedValue(runningDetail())
+    hookReturn = {
+      connectionStatus: 'open',
+      events: [
+        ev('exec_run', 'approval_requested', { approval_id: 'approval_1', tool: 'http.request' }),
+        ev('exec_run', 'execution_waiting_approval', { approval_id: 'approval_1' }),
+      ],
+    }
+
+    renderAt('conv_1')
+    await waitFor(() => expect(screen.getByText('Approval required')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Stop the agent' })).not.toBeInTheDocument()
   })
 })

@@ -7,8 +7,10 @@ import { LogsDrawer } from '../components/chat/LogsDrawer'
 import { conversationsApi } from '../api/conversations'
 import { workspacesApi } from '../api/workspaces'
 import { approvalsApi } from '../api/approvals'
+import { executionsApi } from '../api/executions'
 import { useExecutionEvents } from '../hooks/useExecutionEvents'
-import type { ApprovalMode, ConversationDetail, Workspace } from '../types/domain'
+import { groupTurnEvents } from '../lib/groupEvents'
+import type { ApprovalMode, ConversationDetail, ExecutionEvent, ExecutionStatus, Workspace } from '../types/domain'
 
 // Backend events that mark the end of a turn (agent or team).
 const TERMINAL_EVENT_TYPES = new Set([
@@ -18,6 +20,25 @@ const TERMINAL_EVENT_TYPES = new Set([
   'team_completed',
   'team_failed',
 ])
+
+// Execution statuses where the turn is still in flight. The backend keeps
+// running these in a background task even after the chat is closed, so when we
+// reopen a conversation we reconnect the SSE stream instead of showing a frozen
+// turn.
+const NON_TERMINAL_STATUSES: ReadonlySet<ExecutionStatus> = new Set([
+  'pending',
+  'running',
+  'waiting_approval',
+])
+
+// Merge a turn's persisted events with the events streaming live over SSE,
+// deduping by id. On reconnect the persisted snapshot and the live stream
+// overlap; without this the live updates would be dropped for a turn that was
+// already in `detail`.
+function mergeEvents(persisted: ExecutionEvent[], live: ExecutionEvent[]): ExecutionEvent[] {
+  const seen = new Set(persisted.map(e => e.id).filter(Boolean))
+  return [...persisted, ...live.filter(e => !e.id || !seen.has(e.id))]
+}
 
 export function ConversationView() {
   const { id } = useParams<{ id: string }>()
@@ -29,6 +50,7 @@ export function ConversationView() {
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [logsOpen, setLogsOpen] = useState(false)
+  const [stopping, setStopping] = useState(false)
   const [approvalMode, setApprovalMode] = useState<ApprovalMode>('manual')
   const [resolvingApprovalId, setResolvingApprovalId] = useState<string | null>(null)
   // Per-chat step budget (empty = use engine default). Kept as a string so the
@@ -75,6 +97,14 @@ export function ConversationView() {
         setDetail(d)
         setWorkspaceIds(d.conversation.workspace_ids ?? [])
         setMaxStepsInput(d.conversation.max_steps != null ? String(d.conversation.max_steps) : '')
+        // If the latest turn is still in flight, reconnect its live stream. The
+        // backend has been working (or waiting on approval) the whole time the
+        // chat was closed; this resumes streaming instead of showing it frozen.
+        const last = d.turns[d.turns.length - 1]?.execution
+        if (last && NON_TERMINAL_STATUSES.has(last.status)) {
+          setPendingInput(last.user_input)
+          setActiveExecutionId(last.id)
+        }
       })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
@@ -116,12 +146,26 @@ export function ConversationView() {
   )
 
   const turns: ChatTurnVM[] = useMemo(() => {
-    const persisted: ChatTurnVM[] = (detail?.turns ?? []).map(t => ({
-      id: t.execution.id,
-      userInput: t.execution.user_input,
-      events: t.events,
-      result: t.execution.result,
-    }))
+    const persisted: ChatTurnVM[] = (detail?.turns ?? []).map(t => {
+      // The active turn may already be persisted (e.g. we reopened the chat
+      // mid-run). Fold the live SSE events into it and keep it marked pending so
+      // the "Working…" indicator and Stop button stay visible.
+      if (t.execution.id === activeExecutionId) {
+        return {
+          id: t.execution.id,
+          userInput: t.execution.user_input,
+          events: mergeEvents(t.events, activeEvents),
+          result: t.execution.result,
+          pending: true,
+        }
+      }
+      return {
+        id: t.execution.id,
+        userInput: t.execution.user_input,
+        events: t.events,
+        result: t.execution.result,
+      }
+    })
     const alreadyPersisted = new Set(persisted.map(t => t.id))
     if (activeExecutionId && !alreadyPersisted.has(activeExecutionId)) {
       persisted.push({
@@ -138,6 +182,27 @@ export function ConversationView() {
   const drawerEvents = activeExecutionId
     ? activeEvents
     : detail?.turns[detail.turns.length - 1]?.events ?? []
+
+  // The agent is actively generating when there's an in-flight turn that isn't
+  // paused waiting for an approval (the approve/reject UI takes over there).
+  const activeTurn = turns.find(t => t.id === activeExecutionId)
+  const awaitingApproval = activeTurn ? Boolean(groupTurnEvents(activeTurn.events).pendingApproval) : false
+  const canStop = Boolean(activeExecutionId) && !awaitingApproval
+
+  const handleStop = async () => {
+    if (!activeExecutionId) return
+    setStopping(true)
+    setError(null)
+    try {
+      // The engine emits a terminal `execution_cancelled` event over SSE, which
+      // folds the turn into history via the effect above.
+      await executionsApi.cancel(activeExecutionId)
+    } catch (err) {
+      setError(String(err))
+    } finally {
+      setStopping(false)
+    }
+  }
 
   // Parse the step-limit input into a positive integer, or null when blank/invalid.
   const parsedMaxSteps = (): number | null => {
@@ -340,9 +405,22 @@ export function ConversationView() {
                 }
               }}
             />
-            <button type="submit" className="btn-primary" disabled={sending || !message.trim()}>
-              {sending ? 'Sending…' : 'Send'}
-            </button>
+            <div className="flex items-center gap-2">
+              {canStop && (
+                <button
+                  type="button"
+                  className="btn-danger"
+                  aria-label="Stop the agent"
+                  onClick={handleStop}
+                  disabled={stopping}
+                >
+                  {stopping ? 'Stopping…' : '■ Stop'}
+                </button>
+              )}
+              <button type="submit" className="btn-primary" disabled={sending || !message.trim()}>
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+            </div>
           </form>
         </div>
 

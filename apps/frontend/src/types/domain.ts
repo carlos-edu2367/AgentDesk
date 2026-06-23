@@ -382,6 +382,7 @@ export interface Execution {
   id: string
   type: 'agent' | 'team'
   target_id: string
+  conversation_id?: string | null
   user_input: string
   status: ExecutionStatus
   approval_mode: ApprovalMode

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { StatusBadge } from './StatusBadge'
 import { useBackendHealth } from '../hooks/useBackendHealth'
+import { useActiveExecutions } from '../hooks/useActiveExecutions'
 import { usePrimaryTarget } from '../hooks/usePrimaryTarget'
 import { conversationsApi } from '../api/conversations'
 import { agentsApi } from '../api/agents'
@@ -16,6 +17,7 @@ const FOOTER_LINKS = [
 
 export function Sidebar() {
   const { status } = useBackendHealth()
+  const { conversationIds: activeConversationIds } = useActiveExecutions()
   const { primary } = usePrimaryTarget()
   const navigate = useNavigate()
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -92,19 +94,29 @@ export function Sidebar() {
         <p className="px-2 mb-1 text-xs uppercase tracking-wider text-slate-600">Conversas</p>
         {conversations.length === 0 ? (
           <p className="px-2 text-xs text-slate-600">Nenhuma conversa ainda.</p>
-        ) : conversations.map(c => (
-          <NavLink
-            key={c.id}
-            to={`/conversations/${c.id}`}
-            className={({ isActive }) =>
-              `block px-3 py-2 rounded-md text-sm truncate transition-colors ${
-                isActive ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-              }`
-            }
-          >
-            {c.title || 'Untitled chat'}
-          </NavLink>
-        ))}
+        ) : conversations.map(c => {
+          const running = activeConversationIds.has(c.id)
+          return (
+            <NavLink
+              key={c.id}
+              to={`/conversations/${c.id}`}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                  isActive ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                }`
+              }
+            >
+              {running && (
+                <span
+                  className="w-1.5 h-1.5 shrink-0 rounded-full bg-blue-400 animate-pulse"
+                  title="Agent working"
+                  aria-label="Agent working"
+                />
+              )}
+              <span className="truncate">{c.title || 'Untitled chat'}</span>
+            </NavLink>
+          )
+        })}
       </nav>
 
       <nav className="px-2 py-2 border-t border-slate-800 space-y-0.5">

@@ -55,6 +55,10 @@ vi.mock('../hooks/useBackendHealth', () => ({
   useBackendHealth: () => ({ status: 'online', refresh: vi.fn() }),
 }))
 
+vi.mock('../hooks/useActiveExecutions', () => ({
+  useActiveExecutions: () => ({ conversationIds: new Set(), targetKeys: new Set(), refresh: vi.fn() }),
+}))
+
 describe('Agents list', () => {
   beforeEach(() => {
     navigate.mockReset()

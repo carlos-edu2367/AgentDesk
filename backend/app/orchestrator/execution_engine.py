@@ -30,6 +30,11 @@ class ExecutionEngine:
     def is_cancelled(self, execution_id: str) -> bool:
         return execution_id in self._cancelled_executions
 
+    def clear_cancellation(self, execution_id: str):
+        """Drop a cancellation flag once the run is over. Public so the team
+        engine (which shares this cancellation registry) can clean up too."""
+        self._cancelled_executions.discard(execution_id)
+
     async def _emit_and_save_event(self, db, execution_id: str, event_create: ExecutionEventCreate):
         new_id = generate_id("event")
         db_event = execution_event_repo.create(db, obj_in=event_create, id=new_id)
@@ -365,8 +370,7 @@ class ExecutionEngine:
             ))
 
     def _cleanup(self, execution_id: str):
-        if execution_id in self._cancelled_executions:
-            self._cancelled_executions.remove(execution_id)
+        self.clear_cancellation(execution_id)
 
 
 execution_engine = ExecutionEngine()
