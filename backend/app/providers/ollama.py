@@ -21,6 +21,13 @@ from .errors import (
     EmbeddingUnavailableError
 )
 
+def _msg_to_ollama(m) -> dict:
+    out = {"role": m.role, "content": m.content}
+    if getattr(m, "images", None):
+        out["images"] = [img.base64 for img in m.images]
+    return out
+
+
 class OllamaProvider(ModelProvider):
     def __init__(self, provider_id: str, base_url: str = "http://localhost:11434", config: Dict[str, Any] = None):
         self.provider_id = provider_id
@@ -79,7 +86,7 @@ class OllamaProvider(ModelProvider):
     async def chat(self, request: ChatRequest) -> ChatResponse:
         payload = {
             "model": request.model,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "messages": [_msg_to_ollama(m) for m in request.messages],
             "options": {
                 "temperature": request.temperature,
                 "top_p": request.top_p,
@@ -112,7 +119,7 @@ class OllamaProvider(ModelProvider):
     async def stream_chat(self, request: ChatRequest) -> AsyncGenerator[ModelChunk, None]:
         payload = {
             "model": request.model,
-            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "messages": [_msg_to_ollama(m) for m in request.messages],
             "options": {
                 "temperature": request.temperature,
                 "top_p": request.top_p,
