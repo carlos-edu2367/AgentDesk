@@ -47,6 +47,8 @@ class ModelConfig(BaseModel):
     context_window: int = 32768
     max_tokens: int = 16384
     stream: bool = True
+    vision_provider_id: Optional[str] = None
+    vision_model: Optional[str] = None
 
 class MemoryConfig(BaseModel):
     use_global: bool = True
