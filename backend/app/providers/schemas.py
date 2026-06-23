@@ -9,10 +9,16 @@ class ModelInfo(BaseModel):
     id: str
     name: str
     context_window: int = 8192
+    supports_vision: bool = False
+
+class ImagePart(BaseModel):
+    base64: str
+    media_type: str = "image/png"
 
 class ChatMessage(BaseModel):
     role: str
     content: str
+    images: List[ImagePart] = Field(default_factory=list)
 
 class ChatUsage(BaseModel):
     prompt_tokens: Optional[int] = None
