@@ -9,7 +9,8 @@
     "dev": "cross-env NODE_ENV=development electron .",
     "build": "electron-builder --win",
     "package:portable": "electron-builder --win portable",
-    "package:installer": "electron-builder --win nsis"
+    "package:installer": "electron-builder --win nsis",
+    "make-icon": "node scripts/make-icon.mjs"
   },
   "build": {
     "extends": null,
@@ -39,6 +40,7 @@
     ],
     "win": {
       "signAndEditExecutable": false,
+      "icon": "build/icon.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
@@ -62,6 +64,8 @@
     "cross-env": "^7.0.3",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
+    "png-to-ico": "^2.1.8",
+    "sharp": "^0.33.0",
     "wait-on": "^7.2.0"
   }
 }

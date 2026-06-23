@@ -40,6 +40,9 @@ htmlcov/
 node_modules/
 dist/
 build/
+# electron-builder reads icons from apps/desktop/build (buildResources), keep them tracked
+!apps/desktop/build/
+!apps/desktop/build/**
 .npm/
 test-results/
 playwright-report/
