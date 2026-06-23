@@ -8,6 +8,7 @@ import { conversationsApi } from '../api/conversations'
 import { agentsApi } from '../api/agents'
 import { teamsApi } from '../api/teams'
 import type { Conversation } from '../types/domain'
+import { Logo } from './Logo'
 
 const FOOTER_LINKS = [
   { path: '/agents', label: 'Agents' },
@@ -89,7 +90,10 @@ export function Sidebar() {
   return (
     <aside className="w-64 shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-screen">
       <div className="px-4 py-4 border-b border-slate-800">
-        <span className="text-base font-bold text-slate-100 tracking-tight">AgentDesk</span>
+        <div className="flex items-center gap-2">
+          <Logo className="h-6 w-6" />
+          <span className="text-base font-bold text-slate-100 tracking-tight">AgentDesk</span>
+        </div>
         <div className="mt-1"><StatusBadge status={status} /></div>
       </div>
 

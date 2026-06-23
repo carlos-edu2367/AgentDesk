@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Logo } from './Logo'
 
 type BackendStatus = 'checking' | 'ready' | 'failed'
 
@@ -68,6 +69,7 @@ export function StartupScreen({
   if (status === 'checking') {
     return (
       <div className="flex h-screen w-screen flex-col items-center justify-center gap-6 bg-gray-950 text-gray-100">
+        <Logo className="h-12 w-12" />
         <div className="text-2xl font-bold tracking-tight">AgentDesk</div>
         <div className="flex flex-col items-center gap-1 text-sm text-gray-400">
           <p>Starting AgentDesk backend…</p>
