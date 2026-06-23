@@ -30,10 +30,21 @@ MAX_TRUNCATION_RETRIES = 3
 TOOL_RESULT_PREVIEW_BYTES = 4_000
 TOOL_MODEL_RESULT_MAX_BYTES = 12_000
 TOOL_MODEL_BODY_MAX_CHARS = 8_000
+# Cap applied to the "content" field (filesystem.read) when the full result
+# exceeds TOOL_MODEL_RESULT_MAX_BYTES.  Chosen so total JSON stays < 12 KB.
+TOOL_MODEL_CONTENT_MAX_CHARS = 8_000
+# Maximum items kept in a "results" list (filesystem.grep / filesystem.search)
+# when the encoded result would exceed TOOL_MODEL_RESULT_MAX_BYTES.
+TOOL_MODEL_RESULTS_MAX_ITEMS = 50
 
 
 def _compact_tool_result_for_model(result: Any) -> Any:
-    """Keep tool feedback small enough for the next model turn."""
+    """Keep tool feedback small enough for the next model turn.
+
+    Tries progressively smaller representations until the JSON fits within
+    TOOL_MODEL_RESULT_MAX_BYTES, preserving structure so the model can act
+    on the data rather than just seeing a raw truncated string.
+    """
     original_body_chars = None
     if isinstance(result, dict) and isinstance(result.get("body"), str):
         original_body_chars = len(result["body"])
@@ -47,6 +58,7 @@ def _compact_tool_result_for_model(result: Any) -> Any:
     if len(encoded) <= TOOL_MODEL_RESULT_MAX_BYTES:
         return safe_result
 
+    # --- "body" field (HTTP responses) ----------------------------------
     if isinstance(safe_result, dict) and isinstance(safe_result.get("body"), str):
         body = safe_result["body"]
         compacted = dict(safe_result)
@@ -59,10 +71,57 @@ def _compact_tool_result_for_model(result: Any) -> Any:
         except (TypeError, ValueError):
             pass
 
+    # --- "content" field (filesystem.read) ------------------------------
+    if isinstance(safe_result, dict) and isinstance(safe_result.get("content"), str):
+        content = safe_result["content"]
+        compacted = dict(safe_result)
+        compacted["content"] = content[:TOOL_MODEL_CONTENT_MAX_CHARS]
+        compacted["content_truncated_for_model"] = True
+        compacted["original_content_chars"] = len(content)
+        compacted["hint"] = (
+            "The file content was truncated to fit the context window. "
+            "Use filesystem.read with 'offset' (1-based line number) and "
+            "'limit' (number of lines) to read the remaining content in chunks."
+        )
+        try:
+            if len(json.dumps(compacted, ensure_ascii=False)) <= TOOL_MODEL_RESULT_MAX_BYTES:
+                return compacted
+        except (TypeError, ValueError):
+            pass
+
+    # --- "results" list (filesystem.grep / filesystem.search) -----------
+    if isinstance(safe_result, dict) and isinstance(safe_result.get("results"), list):
+        results_list = safe_result["results"]
+        compacted = dict(safe_result)
+        kept = results_list[:TOOL_MODEL_RESULTS_MAX_ITEMS]
+        compacted["results"] = kept
+        compacted["results_truncated_for_model"] = True
+        compacted["results_returned_for_model"] = len(kept)
+        compacted["total_results"] = safe_result.get("count", len(results_list))
+        try:
+            if len(json.dumps(compacted, ensure_ascii=False)) <= TOOL_MODEL_RESULT_MAX_BYTES:
+                return compacted
+        except (TypeError, ValueError):
+            pass
+
+    # --- Generic fallback: keep as valid JSON object --------------------
+    # Avoid returning a raw truncated JSON string (invalid JSON), which the
+    # model cannot parse. Instead surface key scalar fields and a char count.
+    if isinstance(safe_result, dict):
+        summary: dict = {"truncated_for_model": True, "original_result_chars": len(encoded)}
+        for k, v in safe_result.items():
+            if isinstance(v, (str, int, float, bool)) or v is None:
+                summary[k] = v
+        try:
+            if len(json.dumps(summary, ensure_ascii=False)) <= TOOL_MODEL_RESULT_MAX_BYTES:
+                return summary
+        except (TypeError, ValueError):
+            pass
+
     return {
-        "result_preview": encoded[:TOOL_MODEL_RESULT_MAX_BYTES],
         "truncated_for_model": True,
         "original_result_chars": len(encoded),
+        "hint": "Result was too large. Use more specific arguments to reduce the output size.",
     }
 
 
