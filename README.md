@@ -60,6 +60,21 @@ npm run test:e2e
 
 ## Packaging
 
+### One step (recommended)
+
+From the repository root, build the frontend bundle, the backend executable, and
+the Windows installer + portable artifacts in a single command:
+
+```powershell
+pwsh scripts/build-windows.ps1
+```
+
+Use `-InstallDeps` on a fresh checkout to install Python/Node dependencies first.
+The produced app is self-contained: launching it spawns the local backend and
+loads the frontend UI — no separate processes to start.
+
+### Manual steps
+
 Build backend executable:
 
 ```powershell
@@ -68,16 +83,31 @@ python -m pip install pyinstaller
 pyinstaller pyinstaller/agentdesk-backend.spec
 ```
 
+Build the frontend bundle (consumed by Electron as extraResources):
+
+```powershell
+cd apps/frontend
+npm install
+npm run build
+```
+
 Build Windows desktop artifacts:
 
 ```powershell
 cd apps/desktop
 npm install
+$env:CSC_IDENTITY_AUTO_DISCOVERY = 'false'
 npm run package:portable
 npm run package:installer
 ```
 
-Expected artifacts are under `dist/electron/` at the repository root.
+Expected artifacts are under `dist/electron/` at the repository root:
+
+- `AgentDesk-Setup-<version>.exe` — NSIS installer
+- `AgentDesk-Portable-<version>.exe` — portable single-file executable
+
+Build outputs (`dist/`, `backend/build`, `backend/dist`, `apps/frontend/dist`)
+are gitignored and are **not** committed; only source and docs are versioned.
 
 ## Security Notes
 
