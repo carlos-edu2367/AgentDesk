@@ -1,6 +1,20 @@
 from app.tools.core import computer
 
 
+def test_filter_keeps_interactive_visible_and_caps_count():
+    raw = [
+        {"role": "Button", "name": "OK", "bbox": (0, 0, 50, 20), "visible": True, "enabled": True, "area": 1000},
+        {"role": "Text", "name": "label", "bbox": (0, 0, 10, 10), "visible": True, "enabled": True, "area": 100},
+        {"role": "Button", "name": "Hidden", "bbox": (0, 0, 1, 1), "visible": False, "enabled": True, "area": 1},
+    ]
+    out = computer.filter_elements(raw, max_count=80)
+    roles = [e["role"] for e in out]
+    assert "Text" not in roles
+    assert "OK" in [e["name"] for e in out]
+    assert all(e["visible"] for e in out)
+    assert out[0]["id"] == 0
+
+
 def test_compute_downscale_keeps_aspect_and_factor():
     w, h, sx, sy = computer.compute_downscale(3000, 2000, max_side=1568)
     assert w == 1568
