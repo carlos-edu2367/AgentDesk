@@ -71,3 +71,15 @@
 [2m22:12:57[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/Sidebar.tsx, /src/index.css[22m
 [2m22:13:10[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/groupEvents.test.ts[22m
 [2m22:13:20[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/__tests__/ChatComponents.test.tsx[22m
+[2m23:03:04[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/domain.ts[22m
+[2m23:03:10[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/types/domain.ts[22m
+[2m23:03:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m23:03:26[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m23:03:31[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m23:03:43[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/ConversationView.tsx, /src/index.css[22m
+[2m23:03:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/AgentForm.tsx, /src/index.css[22m
+[2m23:03:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/AgentForm.tsx, /src/index.css[22m
+[2m23:04:09[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/AgentForm.tsx, /src/index.css[22m
+[2m23:04:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/ToolCallChain.tsx, /src/index.css[22m
+[2m23:04:26[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/ToolCallChain.tsx, /src/index.css[22m
+[2m23:04:30[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/chat/ToolCallChain.tsx, /src/index.css[22m
