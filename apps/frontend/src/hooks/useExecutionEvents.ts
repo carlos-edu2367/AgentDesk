@@ -34,7 +34,11 @@ export function useExecutionEvents(executionId: string | null, reconnectKey = 0)
           // Dedup by id: on reconnect (e.g. after approval) the backend replays
           // persisted events that may overlap with live ones still in flight.
           if (incoming.id && prev.some(e => e.id === incoming.id)) return prev
-          return [...prev, incoming]
+          const next = [...prev, incoming]
+          // Cap to the last 2000 events so very long runs don't exhaust memory
+          // or freeze the renderer. Tool/lifecycle events take priority because
+          // the backend no longer replays raw streaming tokens (model_chunk).
+          return next.length > 2000 ? next.slice(-2000) : next
         })
       } catch {
         // ignore malformed events

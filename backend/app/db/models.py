@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, JSON, Text, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, Float, Integer, JSON, Text, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -94,6 +94,9 @@ class ExecutionModel(Base):
 
 class ExecutionEventModel(Base):
     __tablename__ = "execution_events"
+    __table_args__ = (
+        Index('ix_execution_events_exec_created', 'execution_id', 'created_at'),
+    )
     id = Column(String, primary_key=True)
     execution_id = Column(String, ForeignKey("executions.id"))
     type = Column(String)

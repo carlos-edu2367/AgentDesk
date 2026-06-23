@@ -28,6 +28,8 @@ function LogRow({ event }: { event: ExecutionEvent }) {
   )
 }
 
+const MAX_VISIBLE_LOGS = 200
+
 /**
  * Collapsible side drawer holding the raw event timeline for the active turn.
  * Kept out of the chat flow; opened on demand for debugging (design decision A).
@@ -53,10 +55,15 @@ export function LogsDrawer({
     )
   }
 
+  const skipped = Math.max(0, events.length - MAX_VISIBLE_LOGS)
+  const visible = skipped > 0 ? events.slice(-MAX_VISIBLE_LOGS) : events
+
   return (
     <aside className="w-[300px] shrink-0 border-l border-slate-800 bg-slate-950/60 flex flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800">
-        <span className="text-xs font-semibold text-slate-300">Logs (raw timeline)</span>
+        <span className="text-xs font-semibold text-slate-300">
+          Logs{events.length > 0 ? ` (${events.length})` : ''}
+        </span>
         <button className="text-slate-500 hover:text-slate-300 text-xs" onClick={onToggle} aria-label="Close logs">
           ✕
         </button>
@@ -65,7 +72,14 @@ export function LogsDrawer({
         {events.length === 0 ? (
           <p className="text-xs text-slate-500 py-4">No events for this turn.</p>
         ) : (
-          events.map(ev => <LogRow key={ev.id} event={ev} />)
+          <>
+            {skipped > 0 && (
+              <p className="text-xs text-slate-500 py-2 text-center border-b border-slate-800 mb-1">
+                ↑ {skipped} older events hidden
+              </p>
+            )}
+            {visible.map(ev => <LogRow key={ev.id} event={ev} />)}
+          </>
         )}
       </div>
     </aside>

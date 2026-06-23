@@ -17,6 +17,12 @@ from app.orchestrator.team_engine import team_execution_engine
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
+# These event types are only useful while a turn is actively streaming. For
+# completed turns the final answer comes from agent_completed; shipping thousands
+# of raw token deltas over the wire just slows initial load.
+_STREAMING_ONLY_TYPES = frozenset({'model_chunk', 'model_reasoning_chunk'})
+_COMPLETED_STATUSES = frozenset({'completed', 'failed', 'cancelled'})
+
 
 @router.post("", response_model=schemas.Conversation)
 def create_conversation(obj_in: schemas.ConversationCreate, db: Session = Depends(get_db)):
@@ -92,12 +98,14 @@ def get_conversation(id: str, db: Session = Depends(get_db)):
 
     turns: List[schemas.ConversationTurn] = []
     for ex in executions:
-        events = (
+        q = (
             db.query(execution_event_repo.model)
             .filter(execution_event_repo.model.execution_id == ex.id)
             .order_by(execution_event_repo.model.created_at.asc())
-            .all()
         )
+        if ex.status in _COMPLETED_STATUSES:
+            q = q.filter(execution_event_repo.model.type.notin_(_STREAMING_ONLY_TYPES))
+        events = q.all()
         event_views = [
             schemas.ExecutionEvent(
                 **{

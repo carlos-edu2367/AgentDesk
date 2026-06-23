@@ -180,11 +180,17 @@ async def get_execution_events(id: str, db: Session = Depends(get_db)):
             return f"data: {json.dumps(event)}\n\n"
 
         try:
-            # Replay everything already persisted, tracking ids so we can dedup
-            # against live events that may also be sitting in the queue.
+            # Replay persisted events, skipping raw streaming token deltas.
+            # model_chunk / model_reasoning_chunk are only useful while a turn
+            # is actively streaming; replaying thousands of them on reconnect
+            # slows the SSE handshake with no display benefit (the live stream
+            # will deliver new chunks, and completed turns use agent_completed
+            # for the final answer). Tool and lifecycle events are kept.
+            _SKIP_REPLAY = frozenset({'model_chunk', 'model_reasoning_chunk'})
             db_events = (
                 db.query(execution_event_repo.model)
                 .filter(execution_event_repo.model.execution_id == id)
+                .filter(execution_event_repo.model.type.notin_(_SKIP_REPLAY))
                 .order_by(execution_event_repo.model.created_at.asc())
                 .all()
             )
