@@ -64,6 +64,19 @@ a = Analysis(
         # Pydantic v2 validators (sometimes missing)
         "pydantic.deprecated.class_validators",
         "pydantic.deprecated.config",
+        # Computer-use: comtypes generates bindings at runtime;
+        # must be collected wholesale so uiautomation works in frozen app.
+        "comtypes",
+        "comtypes.gen",
+        "uiautomation",
+        "mss",
+        "pynput",
+        "pynput.keyboard",
+        "pynput.mouse",
+    ],
+    collect_submodules=[
+        "comtypes",
+        "uiautomation",
     ],
     hookspath=[],
     hooksconfig={},
