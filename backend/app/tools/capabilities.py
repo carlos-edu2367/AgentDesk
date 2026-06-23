@@ -51,6 +51,13 @@ CAPABILITIES: Dict[str, List[str]] = {
         "team.list",
         "team.execute",
     ],
+    "computer_use": [
+        "screen.perceive",
+        "screen.click",
+        "screen.type",
+        "screen.key",
+        "screen.scroll",
+    ],
 }
 
 # Tools every agent can always use, regardless of its capability list.
@@ -75,6 +82,10 @@ CRITICAL_TOOLS = frozenset({
     "terminal.exec",
     "http.request",
     "web.search",
+    "screen.click",
+    "screen.type",
+    "screen.key",
+    "screen.scroll",
 })
 
 TOOL_RISK_LEVELS: Dict[str, str] = {
@@ -96,6 +107,11 @@ TOOL_RISK_LEVELS: Dict[str, str] = {
     "agent.call": "medium",
     "team.list": "low",
     "team.execute": "medium",
+    "screen.perceive": "low",
+    "screen.click": "high",
+    "screen.type": "high",
+    "screen.key": "high",
+    "screen.scroll": "low",
 }
 
 TOOL_SUMMARIES: Dict[str, str] = {
@@ -117,6 +133,11 @@ TOOL_SUMMARIES: Dict[str, str] = {
     "agent.call": "Call another agent as a subagent",
     "team.list": "List available teams",
     "team.execute": "Execute an agent team",
+    "screen.perceive": "Capture screen and list interactive elements",
+    "screen.click": "Click a UI element or coordinate",
+    "screen.type": "Type text into the focused element",
+    "screen.key": "Send a keyboard shortcut",
+    "screen.scroll": "Scroll the screen",
 }
 
 
