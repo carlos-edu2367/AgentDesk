@@ -11,7 +11,7 @@ from app.db import database
 from app.storage.appdata import ensure_appdata_structure
 from app.tools.registry import register_core_tools
 from app.api import health, storage
-from app.api.routers import agents, teams, workspaces, providers, executions, skills, mcp, plugins, memories, tools, approvals, audit, logs, conversations
+from app.api.routers import agents, teams, workspaces, providers, executions, skills, mcp, plugins, memories, tools, approvals, audit, logs, conversations, ollama
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("agentdesk.startup")
@@ -88,6 +88,7 @@ app.include_router(approvals.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(logs.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
+app.include_router(ollama.router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn
