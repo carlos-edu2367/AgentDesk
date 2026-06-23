@@ -66,6 +66,17 @@ def _compact_tool_result_for_model(result: Any) -> Any:
     }
 
 
+def choose_request_target(has_image: bool, main: tuple, vision) -> tuple:
+    """
+    Return the (provider_id, model) to use for this turn.
+    If the turn has an image and a dedicated vision target, use it.
+    Otherwise use the main model (or main as fallback when vision is None).
+    """
+    if has_image and vision:
+        return vision
+    return main
+
+
 def build_messages_with_vision(history: list) -> list:
     """
     Convert the raw history list to ChatMessage objects, attaching the

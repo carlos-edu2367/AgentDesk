@@ -1,6 +1,6 @@
 from app.domain.schemas import ModelConfig
 from app.runtime.vision_routing import pick_vision_target
-from app.runtime.agent_runtime import build_messages_with_vision
+from app.runtime.agent_runtime import build_messages_with_vision, choose_request_target
 
 
 def test_vision_config_optional_defaults_none():
@@ -55,3 +55,30 @@ def test_messages_preserve_content_and_role():
     msgs = build_messages_with_vision(history)
     assert msgs[0].role == "user"
     assert msgs[0].content == "hello"
+
+
+def test_turn_with_image_uses_vision_target():
+    target = choose_request_target(
+        has_image=True,
+        main=("ollama", "llama3.1:8b"),
+        vision=("ollama", "qwen2.5vl:7b"),
+    )
+    assert target == ("ollama", "qwen2.5vl:7b")
+
+
+def test_turn_without_image_uses_main():
+    target = choose_request_target(
+        has_image=False,
+        main=("ollama", "llama3.1:8b"),
+        vision=("ollama", "qwen2.5vl:7b"),
+    )
+    assert target == ("ollama", "llama3.1:8b")
+
+
+def test_no_vision_falls_back_to_main_for_image_turn():
+    target = choose_request_target(
+        has_image=True,
+        main=("ollama", "llama3.1:8b"),
+        vision=None,
+    )
+    assert target == ("ollama", "llama3.1:8b")
