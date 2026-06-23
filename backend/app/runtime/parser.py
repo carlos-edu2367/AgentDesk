@@ -30,6 +30,20 @@ class OutputParser:
     _PROTOCOL_OPENER_RE = re.compile(
         r'\{\s*"type"\s*:\s*"(tool_call|tool_calls|final_answer|subagent_call)"'
     )
+    # Matches: <|tool_call>call:tool.name{key:<|">val<|">}<tool_call>
+    # Emitted by some local/fine-tuned models that use special-token delimiters
+    # instead of the JSON protocol taught in the system prompt.
+    _TAG_TOOL_RE = re.compile(
+        r"<\|tool_call\>\s*call:([a-z_][a-z0-9_.]*)\s*\{(.*?)\}\s*<\|?/?tool_call\>?",
+        re.DOTALL | re.IGNORECASE,
+    )
+    # Matches a single argument inside the tag-format arg block.
+    # Group 1+2: quoted with <|"> or " delimiters; group 3+4: bare (unquoted) value.
+    _TAG_ARG_RE = re.compile(
+        r'([a-z_][a-z0-9_]*)\s*:\s*(?:<\|"\>|")(.*?)(?:<\|"\>|")'
+        r'|([a-z_][a-z0-9_]*)\s*:\s*([^,}\s]+)',
+        re.DOTALL,
+    )
 
     def parse(self, raw_text: str) -> ParserResult:
         text = raw_text.strip()
@@ -67,7 +81,13 @@ class OutputParser:
                 is_batch=len(embedded_calls) > 1,
             )
 
-        # 4. Fallback: plain text final answer
+        # 4. <|tool_call>call:name{args}<tool_call> — special-token format used by
+        # some local/fine-tuned models instead of the JSON protocol.
+        result = self._try_parse_tag_tool_call(text)
+        if result:
+            return result
+
+        # 5. Fallback: plain text final answer
         return ParserResult(is_final=True, content=text)
 
     def looks_like_truncated_tool_call(self, raw_text: str) -> bool:
@@ -247,6 +267,24 @@ class OutputParser:
             )
 
         return None
+
+    def _try_parse_tag_tool_call(self, text: str) -> "ParserResult | None":
+        m = self._TAG_TOOL_RE.search(text)
+        if not m:
+            return None
+        tool = m.group(1)
+        args_text = m.group(2)
+        arguments: Dict[str, Any] = {}
+        for am in self._TAG_ARG_RE.finditer(args_text):
+            if am.group(1) is not None:
+                arguments[am.group(1)] = am.group(2)
+            elif am.group(3) is not None:
+                arguments[am.group(3)] = am.group(4)
+        return ParserResult(
+            is_final=False,
+            is_tool_call=True,
+            tool_calls=[{"id": "call_1", "tool": tool, "arguments": arguments}],
+        )
 
     def _normalize_tool_call(self, data: Dict[str, Any], index: int) -> Dict[str, Any]:
         return {

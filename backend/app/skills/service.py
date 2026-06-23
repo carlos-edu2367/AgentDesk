@@ -159,38 +159,30 @@ class SkillService:
         ordered_ids = agent_ids + team_ids
         skills = self._get_skills_by_ids(ordered_ids)
 
-        parts: list[str] = []
+        if not skills:
+            return FormattedSkills(text="", loaded=[], injected=[], truncated=False)
+
+        lines: list[str] = [
+            "[AVAILABLE SKILLS]",
+            'To load a skill use the standard tool call JSON: {"type": "tool_call", "tool": "skill.use", "arguments": {"skill_id": "<id>"}}',
+            "Invoke the relevant skill BEFORE starting the corresponding task.",
+            "",
+        ]
         loaded: list[dict] = []
         injected: list[dict] = []
-        total_chars = 0
         truncated = False
 
         for skill in skills:
             if len(injected) >= self.max_skills_per_prompt:
                 truncated = True
                 break
-
-            prompt = skill.prompt or ""
-            if len(prompt) > self.max_skill_chars_per_item:
-                prompt = prompt[: self.max_skill_chars_per_item] + "\n[truncated]"
-                truncated = True
-
-            block = f"[ACTIVE SKILL: {skill.name} | {skill.id}]\n{prompt}"
-            if total_chars + len(block) > self.max_total_skill_chars:
-                remaining = self.max_total_skill_chars - total_chars
-                if remaining <= 80:
-                    truncated = True
-                    break
-                block = block[:remaining] + "\n[truncated]"
-                truncated = True
-
-            parts.append(block)
-            total_chars += len(block)
+            description = (skill.description or "").replace("\n", " ").strip()
+            lines.append(f"- {skill.id} | {skill.name} | {description}")
             item = {"id": skill.id, "name": skill.name}
             loaded.append(item)
             injected.append(item)
 
-        text = "[ACTIVE SKILLS]\n" + "\n\n".join(parts) if parts else ""
+        text = "\n".join(lines)
         return FormattedSkills(text=text, loaded=loaded, injected=injected, truncated=truncated)
 
     def _get_agent(self, agent_id: str) -> AgentModel:

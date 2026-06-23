@@ -159,9 +159,10 @@ async def test_runtime_injects_agent_and_team_skills_without_duplicates(client):
         db.close()
 
     prompt = next(e for e in events if e.type == EventType.PROMPT_BUILT).content["messages"][0]["content"]
-    assert prompt.count("[ACTIVE SKILL: Report Writer | skill_shared]") == 1
-    assert "[ACTIVE SKILL: Report Writer | skill_agent]" in prompt
-    assert "[ACTIVE SKILL: Team Skill" in prompt
+    assert "[AVAILABLE SKILLS]" in prompt
+    assert prompt.count("skill_shared") == 1
+    assert "skill_agent" in prompt
+    assert "skill_team" in prompt
     assert any(e.type == EventType.SKILLS_LOADED for e in events)
     assert any(e.type == EventType.SKILL_INJECTED for e in events)
 
@@ -191,6 +192,5 @@ async def test_runtime_truncates_skill_context(client):
         db.close()
 
     prompt = next(e for e in events if e.type == EventType.PROMPT_BUILT).content["messages"][0]["content"]
-    assert prompt.count("[ACTIVE SKILL:") == 10
-    assert prompt.count("[ACTIVE SKILL:") <= 10
+    assert prompt.count("- skill_") == 10
     assert any(e.type == EventType.SKILLS_TRUNCATED for e in events)
