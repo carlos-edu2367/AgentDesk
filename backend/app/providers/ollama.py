@@ -21,7 +21,7 @@ from .errors import (
     EmbeddingUnavailableError
 )
 
-_VISION_FAMILIES = ("llava", "gemma3", "qwen2.5vl", "qwen2.5-vl",
+_VISION_FAMILIES = ("llava", "gemma3", "gemma4", "qwen2.5vl", "qwen2.5-vl", "qwen3.5",
                     "llama3.2-vision", "minicpm-v", "moondream", "bakllava")
 
 
