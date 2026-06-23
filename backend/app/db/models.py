@@ -70,6 +70,8 @@ class ConversationModel(Base):
     title = Column(String, default="")
     workspace_ids = Column(JSON, default=list)  # workspaces granted to this chat
     max_steps = Column(Integer, nullable=True)  # per-chat runtime step budget; NULL = engine default
+    computer_use_enabled = Column(Boolean, default=False)
+    computer_use_display = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

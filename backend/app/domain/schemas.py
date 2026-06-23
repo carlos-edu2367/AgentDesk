@@ -213,6 +213,8 @@ class ConversationBase(BaseModel):
     title: str = ""
     workspace_ids: List[str] = Field(default_factory=list)
     max_steps: Optional[int] = None  # per-chat runtime step budget; None = engine default
+    computer_use_enabled: bool = False
+    computer_use_display: int = 0
 
     @field_validator("workspace_ids", mode="before")
     @classmethod
@@ -228,6 +230,8 @@ class ConversationUpdate(BaseModel):
     title: Optional[str] = None
     workspace_ids: Optional[List[str]] = None
     max_steps: Optional[int] = None
+    computer_use_enabled: Optional[bool] = None
+    computer_use_display: Optional[int] = None
 
 class Conversation(ConversationBase):
     id: str
