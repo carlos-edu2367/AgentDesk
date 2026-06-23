@@ -76,6 +76,38 @@ describe('groupTurnEvents', () => {
     expect(view.toolCalls).toHaveLength(1)
   })
 
+  it('interleaves narration and tool calls as inline segments in stream order', () => {
+    const view = groupTurnEvents([
+      ev({ type: 'model_chunk', content: { delta: 'Vou buscar na web.' } }),
+      ev({ type: 'model_chunk', content: { delta: '{"type":"tool_call","tool":"web.search"}' } }),
+      ev({ id: 't1', type: 'tool_call_requested', content: { tool: 'web.search' } }),
+      ev({ type: 'tool_executed', content: { tool: 'web.search' } }),
+      ev({ type: 'model_chunk', content: { delta: 'Encontrei as informações.' } }),
+      ev({ type: 'agent_completed', content: { result: 'Resposta final.' } }),
+    ])
+
+    expect(view.segments.map(s => s.kind)).toEqual(['text', 'tool', 'text'])
+    const [first, tool, last] = view.segments
+    expect(first).toMatchObject({ kind: 'text', text: 'Vou buscar na web.' })
+    expect(tool).toMatchObject({ kind: 'tool' })
+    if (tool.kind === 'tool') expect(tool.call.tool).toBe('web.search')
+    expect(last).toMatchObject({ kind: 'text', text: 'Encontrei as informações.' })
+    expect(view.finalAnswer).toBe('Resposta final.')
+  })
+
+  it('keeps tool segments in sync with the tool-call chain object', () => {
+    const view = groupTurnEvents([
+      ev({ id: 't1', type: 'tool_call_requested', content: { tool: 'read_file' } }),
+      ev({ type: 'tool_executed', content: { tool: 'read_file' } }),
+    ])
+    expect(view.segments).toHaveLength(1)
+    const seg = view.segments[0]
+    expect(seg.kind).toBe('tool')
+    // Same reference as the flat chain, so status updates propagate to both.
+    if (seg.kind === 'tool') expect(seg.call).toBe(view.toolCalls[0])
+    expect(view.toolCalls[0].status).toBe('success')
+  })
+
   it('marks failed tool calls', () => {
     const view = groupTurnEvents([
       ev({ type: 'tool_call_requested', content: { tool: 'write_file' } }),

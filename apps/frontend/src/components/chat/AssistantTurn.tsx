@@ -2,7 +2,7 @@ import type { ExecutionEvent } from '../../types/domain'
 import { groupTurnEvents, groupTeamEvents } from '../../lib/groupEvents'
 import { Markdown } from './Markdown'
 import { ThinkingBlock } from './ThinkingBlock'
-import { ToolCallChain } from './ToolCallChain'
+import { ToolCallCard } from './ToolCallChain'
 import { TeamSubThread } from './TeamSubThread'
 
 /**
@@ -25,15 +25,35 @@ export function AssistantTurn({
 }) {
   const view = groupTurnEvents(events)
   const teamMembers = groupTeamEvents(events)
-  const answer = view.answer || fallbackResult || ''
+  // When the turn used tools, render its narration and tool calls inline in
+  // stream order (Claude-style). The bottom answer is then the clean parsed
+  // final answer only — the narration already shows in the segments, so reusing
+  // `view.answer` (which falls back to the full streamed text mid-turn) would
+  // duplicate it. No-tool turns keep the original single-answer rendering.
+  const inline = view.toolCalls.length > 0
+  const answer = inline
+    ? view.finalAnswer || fallbackResult || ''
+    : view.answer || fallbackResult || ''
   const approval = view.pendingApproval
   const approvalBusy = approval ? resolvingApprovalId === approval.approvalId : false
 
   return (
     <div className="self-start max-w-[85%] rounded-lg rounded-bl-sm border border-slate-700 bg-slate-800/60 px-3 py-2">
       <TeamSubThread members={teamMembers} />
-      <ToolCallChain toolCalls={view.toolCalls} />
       <ThinkingBlock thinking={view.thinking} />
+      {inline && (
+        <div className="mt-2 space-y-2">
+          {view.segments.map(seg =>
+            seg.kind === 'text' ? (
+              <div key={seg.key} className="text-sm">
+                <Markdown>{seg.text}</Markdown>
+              </div>
+            ) : (
+              <ToolCallCard key={seg.key} call={seg.call} />
+            ),
+          )}
+        </div>
+      )}
 
       {approval && onResolveApproval && (
         <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3">

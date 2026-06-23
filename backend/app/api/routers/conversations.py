@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -8,6 +8,7 @@ from app.db.repositories.registry import (
     conversation_repo,
     execution_repo,
     execution_event_repo,
+    approval_repo,
 )
 from app.domain.utils import CHAT_DISPLAY_MAX_CHARS, generate_id, sanitize_for_output
 from app.domain.enums import ExecutionType, ExecutionStatus
@@ -43,6 +44,37 @@ def update_conversation(id: str, obj_in: schemas.ConversationUpdate, db: Session
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return conversation_repo.update(db, db_obj=conv, obj_in=obj_in)
+
+
+@router.delete("/{id}", status_code=204)
+def delete_conversation(id: str, db: Session = Depends(get_db)):
+    """Delete a conversation along with all of its turns (executions, their
+    events, and any approval requests). There is no FK cascade, so the child
+    rows are removed explicitly to avoid orphans."""
+    conv = conversation_repo.get(db, id=id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    execution_ids = [
+        row[0]
+        for row in db.query(execution_repo.model.id)
+        .filter(execution_repo.model.conversation_id == id)
+        .all()
+    ]
+    if execution_ids:
+        db.query(execution_event_repo.model).filter(
+            execution_event_repo.model.execution_id.in_(execution_ids)
+        ).delete(synchronize_session=False)
+        db.query(approval_repo.model).filter(
+            approval_repo.model.execution_id.in_(execution_ids)
+        ).delete(synchronize_session=False)
+        db.query(execution_repo.model).filter(
+            execution_repo.model.id.in_(execution_ids)
+        ).delete(synchronize_session=False)
+
+    db.delete(conv)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/{id}", response_model=schemas.ConversationDetail)

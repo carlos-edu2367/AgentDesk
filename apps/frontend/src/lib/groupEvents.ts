@@ -31,9 +31,26 @@ export interface TeamMemberView {
   status: TeamMemberStatus
 }
 
+/**
+ * One piece of an assistant turn rendered inline, in stream order: either a run
+ * of narration text or a tool call. Lets the chat interleave "Vou buscar na web
+ * → [tool] → Encontrei…" like Claude does, instead of stacking every tool above
+ * the prose.
+ */
+export type TurnSegment =
+  | { kind: 'text'; key: string; text: string }
+  | { kind: 'tool'; key: string; call: ToolCallView }
+
 export interface TurnView {
   /** Streamed/finalized assistant answer (markdown). */
   answer: string
+  /** The clean, parsed final answer (from agent_completed), when available. */
+  finalAnswer: string
+  /**
+   * Narration and tool calls in stream order. Tool segments reference the same
+   * objects as `toolCalls`, so their status updates as the turn progresses.
+   */
+  segments: TurnSegment[]
   /** Concatenated model reasoning tokens, when the model emits them. */
   thinking: string
   /** Ordered chain of tool calls made during the turn. */
@@ -136,6 +153,15 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
   const notices: string[] = []
   const approvals = new Map<string, ApprovalView>()
 
+  // Inline segments: narration runs interleaved with tool calls in stream order.
+  const segments: TurnSegment[] = []
+  let segBuf = ''
+  const flushText = () => {
+    const text = stripProtocolJson(segBuf)
+    segBuf = ''
+    if (text) segments.push({ kind: 'text', key: `seg-${segments.length}`, text })
+  }
+
   const openCallFor = (ev: ExecutionEvent): ToolCallView | undefined => {
     const id = eventCallId(ev)
     const name = toolName(ev)
@@ -157,7 +183,9 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     const type = ev.type
 
     if (type === 'model_chunk') {
-      streamed += (c.delta as string) ?? ''
+      const delta = (c.delta as string) ?? ''
+      streamed += delta
+      segBuf += delta
       return
     }
     if (type === 'model_reasoning_chunk') {
@@ -183,13 +211,19 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     }
 
     if (TOOL_REQUEST_TYPES.has(type)) {
-      toolCalls.push({
+      // Close the narration run that preceded this call, then add the call to
+      // both the flat chain and the inline segment stream (same object, so later
+      // status/result updates show up in both).
+      flushText()
+      const call: ToolCallView = {
         key: `${ev.id || idx}`,
         id: eventCallId(ev),
         tool: toolName(ev),
         args: (c.arguments as Record<string, unknown>) ?? undefined,
         status: 'requested',
-      })
+      }
+      toolCalls.push(call)
+      segments.push({ kind: 'tool', key: call.key, call })
       return
     }
     if (type === 'tool_call_validated') {
@@ -243,12 +277,18 @@ export function groupTurnEvents(events: ExecutionEvent[]): TurnView {
     }
   })
 
+  // Close any narration that followed the last tool call (the pre-final-answer
+  // prose, e.g. "Encontrei as seguintes informações").
+  flushText()
+
   return {
     // Prefer the clean parsed answer (from agent_completed). While the turn is
     // still streaming, show the model's narration with protocol JSON stripped so
     // tool-using turns surface progress text live instead of staying blank until
     // completion (and never render raw `{"type":...}` JSON).
     answer: finalAnswer || stripProtocolJson(streamed),
+    finalAnswer,
+    segments,
     thinking,
     toolCalls,
     notices,

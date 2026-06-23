@@ -29,7 +29,7 @@ function argHint(call: ToolCallView): string | undefined {
   return s.length > 44 ? '…' + s.slice(-42) : s
 }
 
-function ToolCallCard({ call }: { call: ToolCallView }) {
+export function ToolCallCard({ call }: { call: ToolCallView }) {
   const [open, setOpen] = useState(false)
   const style = STATUS_STYLE[call.status]
   const hasDetail = !!call.args || !!call.resultPreview || !!call.error

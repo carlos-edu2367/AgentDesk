@@ -222,6 +222,43 @@ def test_message_max_steps_overrides_conversation(setup_agent, test_db):
     assert execution.max_steps == 12
 
 
+def test_delete_conversation_removes_turns(setup_agent, test_db):
+    from app.db.repositories.registry import execution_event_repo
+
+    conv = client.post(
+        "/api/conversations", json={"type": "agent", "target_id": "agent_1"}
+    ).json()
+    r = client.post(f"/api/conversations/{conv['id']}/messages", json={"message": "Hello"})
+    exec_id = r.json()["execution_id"]
+
+    time.sleep(1)  # let the background task produce events
+
+    # Sanity: the turn and its events exist before deletion.
+    assert execution_repo.get(test_db, id=exec_id) is not None
+    events_before = [
+        e for e in execution_event_repo.get_multi(test_db, limit=1000)
+        if e.execution_id == exec_id
+    ]
+    assert len(events_before) > 0
+
+    d = client.delete(f"/api/conversations/{conv['id']}")
+    assert d.status_code == 204, d.text
+
+    # Conversation, its executions, and their events are all gone.
+    assert client.get(f"/api/conversations/{conv['id']}").status_code == 404
+    test_db.expire_all()
+    assert execution_repo.get(test_db, id=exec_id) is None
+    events_after = [
+        e for e in execution_event_repo.get_multi(test_db, limit=1000)
+        if e.execution_id == exec_id
+    ]
+    assert events_after == []
+
+
+def test_delete_conversation_404():
+    assert client.delete("/api/conversations/does-not-exist").status_code == 404
+
+
 def test_build_conversation_history(setup_agent, test_db):
     from app.runtime.history import build_conversation_history
 

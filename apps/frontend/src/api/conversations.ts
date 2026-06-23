@@ -15,6 +15,7 @@ export const conversationsApi = {
     api.post<Conversation>('/api/conversations', data),
   update: (id: string, data: ConversationUpdate) =>
     api.patch<Conversation>(`/api/conversations/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/api/conversations/${id}`),
   sendMessage: (id: string, data: ConversationMessageRequest) =>
     api.post<{ execution_id: string; conversation_id: string; status: string }>(
       `/api/conversations/${id}/messages`,

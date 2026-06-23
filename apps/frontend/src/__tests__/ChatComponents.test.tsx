@@ -42,6 +42,25 @@ describe('AssistantTurn', () => {
     expect(screen.getByText('read_file')).toBeInTheDocument()
   })
 
+  it('renders narration and tool calls inline, with the final answer below', () => {
+    render(
+      <AssistantTurn
+        events={[
+          ev('model_chunk', { delta: 'Vou buscar na web.' }),
+          ev('model_chunk', { delta: '{"type":"tool_call","tool":"web.search"}' }),
+          ev('tool_call_requested', { tool: 'web.search' }, 't1'),
+          ev('tool_executed', { tool: 'web.search' }),
+          ev('model_chunk', { delta: 'Encontrei as informações.' }),
+          ev('agent_completed', { result: 'Resposta final.' }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('Vou buscar na web.')).toBeInTheDocument()
+    expect(screen.getByText('web.search')).toBeInTheDocument()
+    expect(screen.getByText('Encontrei as informações.')).toBeInTheDocument()
+    expect(screen.getByText('Resposta final.')).toBeInTheDocument()
+  })
+
   it('renders inline approval controls when a tool is waiting for approval', () => {
     const onResolveApproval = vi.fn()
     render(

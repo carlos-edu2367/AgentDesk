@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { StatusBadge } from './StatusBadge'
 import { useBackendHealth } from '../hooks/useBackendHealth'
 import { useActiveExecutions } from '../hooks/useActiveExecutions'
@@ -20,7 +20,9 @@ export function Sidebar() {
   const { conversationIds: activeConversationIds } = useActiveExecutions()
   const { primary } = usePrimaryTarget()
   const navigate = useNavigate()
+  const location = useLocation()
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [targets, setTargets] = useState<{ type: 'agent' | 'team'; id: string; name: string }[]>([])
 
@@ -47,6 +49,29 @@ export function Sidebar() {
         : (await teamsApi.list().catch(() => [])).find(t => t.id === primary.id)?.name
     if (!name) { navigate('/agents'); return }
     startChat(primary.type, primary.id, name)
+  }
+
+  const deleteChat = async (e: React.MouseEvent, c: Conversation) => {
+    // The row is a NavLink; don't navigate into the chat we're deleting.
+    e.preventDefault()
+    e.stopPropagation()
+    if (deletingId) return
+    if (!window.confirm(`Excluir a conversa "${c.title || 'Untitled chat'}"? Esta ação não pode ser desfeita.`)) {
+      return
+    }
+    setDeletingId(c.id)
+    try {
+      await conversationsApi.delete(c.id)
+      setConversations(prev => prev.filter(x => x.id !== c.id))
+      // If we're currently viewing the deleted chat, leave it.
+      if (location.pathname === `/conversations/${c.id}`) {
+        navigate('/agents')
+      }
+    } catch (err) {
+      alert(`Falha ao excluir a conversa: ${err}`)
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   const openPicker = async () => {
@@ -97,24 +122,35 @@ export function Sidebar() {
         ) : conversations.map(c => {
           const running = activeConversationIds.has(c.id)
           return (
-            <NavLink
-              key={c.id}
-              to={`/conversations/${c.id}`}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
-                }`
-              }
-            >
-              {running && (
-                <span
-                  className="w-1.5 h-1.5 shrink-0 rounded-full bg-blue-400 animate-pulse"
-                  title="Agent working"
-                  aria-label="Agent working"
-                />
-              )}
-              <span className="truncate">{c.title || 'Untitled chat'}</span>
-            </NavLink>
+            <div key={c.id} className="group relative">
+              <NavLink
+                to={`/conversations/${c.id}`}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 pl-3 pr-8 py-2 rounded-md text-sm transition-colors ${
+                    isActive ? 'bg-blue-600/20 text-blue-300' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                  }`
+                }
+              >
+                {running && (
+                  <span
+                    className="w-1.5 h-1.5 shrink-0 rounded-full bg-blue-400 animate-pulse"
+                    title="Agent working"
+                    aria-label="Agent working"
+                  />
+                )}
+                <span className="truncate">{c.title || 'Untitled chat'}</span>
+              </NavLink>
+              <button
+                type="button"
+                aria-label={`Excluir conversa ${c.title || 'Untitled chat'}`}
+                title="Excluir conversa"
+                disabled={deletingId === c.id}
+                onClick={e => deleteChat(e, c)}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 opacity-0 transition-opacity hover:bg-slate-700 hover:text-red-300 focus:opacity-100 group-hover:opacity-100 disabled:opacity-50"
+              >
+                {deletingId === c.id ? '…' : '🗑'}
+              </button>
+            </div>
           )
         })}
       </nav>
