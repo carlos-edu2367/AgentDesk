@@ -327,6 +327,8 @@ class ExecutionEngine:
                     status=ExecutionStatus.WAITING_APPROVAL
                 ))
                 return None  # Signal that execution is paused
+            elif event.type == EventType.ERROR:
+                raise RuntimeError(event.content.get("error", "Runtime error"))
 
         return final_result
 

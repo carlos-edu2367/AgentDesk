@@ -509,6 +509,7 @@ class AgentRuntime:
 
             max_steps = int(runtime_options.get("max_steps") or MAX_STEPS)
             truncation_retries = 0
+            had_tool_activity = False
             for step in range(initial_step, max_steps):
                 yield self._make_event(
                     execution_id, EventType.MODEL_REQUEST_STARTED, "runtime", provider_config.id,
@@ -549,6 +550,19 @@ class AgentRuntime:
                     execution_id, EventType.MODEL_COMPLETED, "model", provider_config.id,
                     {"raw_output": final_text}
                 )
+
+                if not final_text.strip():
+                    detail = " after tool use" if had_tool_activity else ""
+                    yield self._make_event(
+                        execution_id, EventType.ERROR, "runtime", agent_id,
+                        {
+                            "error": (
+                                f"Model returned an empty response{detail}. "
+                                "No final answer or tool call was produced."
+                            )
+                        }
+                    )
+                    return
 
                 parsed = self.parser.parse(final_text)
 
@@ -615,6 +629,7 @@ class AgentRuntime:
                 # A well-formed tool call landed — clear the consecutive-truncation
                 # tally so earlier blips don't count against a now-healthy turn.
                 truncation_retries = 0
+                had_tool_activity = True
                 messages.append({"role": "assistant", "content": final_text.strip()})
                 tool_results = []
                 for call in parsed.tool_calls:

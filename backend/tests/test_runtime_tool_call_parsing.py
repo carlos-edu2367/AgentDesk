@@ -169,6 +169,111 @@ async def test_runtime_surfaces_truncation_and_gives_up_instead_of_looping():
 
 
 @pytest.mark.asyncio
+async def test_runtime_does_not_complete_with_empty_result_after_tool_use():
+    tool_registry.unregister("test.echo")
+    tool_registry.register(EchoTool())
+    agent = Agent(
+        id="agent_1",
+        name="Agent",
+        model_config=ModelConfig(provider_id="prov_1", model="mock"),
+        explicit_tools=["test.echo"],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    execution = Execution(
+        id="exec_1",
+        type=ExecutionType.AGENT,
+        target_id="agent_1",
+        user_input="inspect and continue",
+        status=ExecutionStatus.RUNNING,
+        approval_mode=ApprovalMode.AUTO,
+        workspace_ids=[],
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    provider_config = Provider(id="prov_1", type=ProviderType.OLLAMA, name="Mock")
+    provider = MagicMock()
+    provider.chat = AsyncMock(
+        side_effect=[
+            ChatResponse(
+                provider_id="prov_1",
+                model="mock",
+                content='{"type":"tool_call","tool":"test.echo","arguments":{"value":"context"}}',
+            ),
+            ChatResponse(provider_id="prov_1", model="mock", content=""),
+        ]
+    )
+
+    try:
+        with patch("app.runtime.agent_runtime.provider_registry") as provider_registry:
+            provider_registry.get.return_value = provider
+            events = [
+                event
+                async for event in AgentRuntime().run(agent, execution, provider_config, stream=False)
+            ]
+    finally:
+        tool_registry.unregister("test.echo")
+
+    assert [event.type.value for event in events if event.type.value == "tool_result"] == ["tool_result"]
+    assert not any(
+        event.type.value == "agent_completed" and event.content.get("result") == ""
+        for event in events
+    )
+    error_events = [event for event in events if event.type.value == "error"]
+    assert len(error_events) == 1
+    assert "empty response" in error_events[0].content["error"].lower()
+
+
+@pytest.mark.asyncio
+async def test_execution_engine_fails_when_runtime_emits_error():
+    from app.domain.enums import EventType
+    from app.domain.schemas import ExecutionEventCreate
+    from app.orchestrator.execution_engine import ExecutionEngine
+
+    engine = ExecutionEngine()
+    db = MagicMock()
+    agent = Agent(
+        id="agent_1",
+        name="Agent",
+        model_config=ModelConfig(provider_id="prov_1", model="mock"),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    provider_config = Provider(id="prov_1", type=ProviderType.OLLAMA, name="Mock")
+    engine._emit_and_save_event = AsyncMock()
+
+    with (
+        patch("app.orchestrator.execution_engine.execution_repo.get") as get_execution,
+        patch("app.orchestrator.execution_engine.AgentRuntime") as Runtime,
+    ):
+        get_execution.return_value = Execution(
+            id="exec_1",
+            type=ExecutionType.AGENT,
+            target_id="agent_1",
+            user_input="run",
+            status=ExecutionStatus.RUNNING,
+            approval_mode=ApprovalMode.AUTO,
+            workspace_ids=[],
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        async def fake_run(**kwargs):
+            yield ExecutionEventCreate(
+                execution_id="exec_1",
+                type=EventType.ERROR,
+                source="runtime",
+                source_id="agent_1",
+                content={"error": "empty response from model"},
+            )
+
+        Runtime.return_value.run = fake_run
+
+        with pytest.raises(RuntimeError, match="empty response from model"):
+            await engine._run_runtime_loop(db, "exec_1", agent, provider_config, stream=False)
+
+
+@pytest.mark.asyncio
 async def test_runtime_returns_tool_result_to_model_and_allows_another_tool_call():
     tool_registry.unregister("test.echo")
     tool_registry.register(EchoTool())
