@@ -382,6 +382,15 @@ class AgentRuntime:
                 agent.blocked_tools,
             )
 
+            # computer_use requires both: agent capability grant + per-conversation flag.
+            from app.runtime.capability_gate import resolve_computer_use
+            from app.tools.capabilities import CAPABILITIES as _CAPS
+            _cu_agent_has = "computer_use" in (agent.capabilities or [])
+            _cu_chat_on = bool(runtime_options.get("computer_use_enabled", False))
+            if not resolve_computer_use(_cu_agent_has, _cu_chat_on):
+                _cu_tools = set(_CAPS.get("computer_use", []))
+                available_tools = [t for t in available_tools if t.name not in _cu_tools]
+
             if initial_messages is not None:
                 messages = initial_messages
             else:

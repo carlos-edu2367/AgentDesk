@@ -303,6 +303,14 @@ class ExecutionEngine:
         if getattr(execution, "max_steps", None):
             runtime_options["max_steps"] = execution.max_steps
 
+        # Propagate per-conversation computer-use flags to the runtime.
+        if getattr(execution, "conversation_id", None):
+            from app.db.repositories.registry import conversation_repo
+            conv = conversation_repo.get(db, id=execution.conversation_id)
+            if conv:
+                runtime_options["computer_use_enabled"] = bool(getattr(conv, "computer_use_enabled", False))
+                runtime_options["computer_use_display"] = int(getattr(conv, "computer_use_display", 0))
+
         async for event in runtime.run(
             agent=agent, execution=execution, provider_config=provider_config,
             stream=stream, initial_messages=initial_messages, initial_step=initial_step,
